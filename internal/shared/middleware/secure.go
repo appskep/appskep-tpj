@@ -15,10 +15,12 @@ import (
 // handlers, so those had to be rewritten regardless, and once they are gone the
 // nonce buys nothing.
 //
-// No third-party origin appears here because the app loads none. Midtrans' Snap
-// is reached by a server-side 303 to their hosted page, not by their snap.js, so
-// there is no script or frame origin to allow. Fonts, CSS, the icon sprite and
-// Turbo are all self-hosted.
+// No third-party origin appears here as a source the app LOADS from. Midtrans'
+// Snap is reached by a server-side 303 to their hosted page, not by their
+// snap.js, so there is no script or frame origin to allow. Fonts, CSS, the icon
+// sprite and Turbo are all self-hosted. form-action is the one exception, and it
+// is about where a form may SEND the customer rather than what the page pulls in;
+// see snapOrigins.
 //
 // data: is allowed for images only, for inline SVG data URIs; object-src 'none'
 // and base-uri 'none' close the two classic injection escapes, and
@@ -37,13 +39,27 @@ import (
 // is repeated in scripts/build-js.sh, which is where someone would do it.
 const turboProgressBarCSS = "'sha256-WAyOw4V+FqDc35lQPyRADLBWbuNK8ahvYEaQIYF1+Ps='"
 
+// snapOrigins is where "Bayar sekarang" actually lands. That POST answers with a
+// 303 to Midtrans' hosted page, and form-action is checked against every hop of a
+// form navigation's redirect chain in Firefox and Safari — so 'self' alone blocks
+// the customer's only route to paying, in the browsers that check.
+//
+// Both hosts, always: which one is live depends on MIDTRANS_ENV, and a form target
+// the app never points at costs nothing.
+//
+// form-action ONLY. Nothing is loaded from Midtrans, so there is still no script,
+// frame or connect origin to allow — and connect-src in particular must stay
+// 'self', which is why the pay form carries data-turbo="false" rather than being
+// let through as a fetch.
+const snapOrigins = "https://app.midtrans.com https://app.sandbox.midtrans.com"
+
 const contentSecurityPolicy = "default-src 'self'; " +
 	"script-src 'self'; " +
 	"style-src 'self' " + turboProgressBarCSS + "; " +
 	"img-src 'self' data:; " +
 	"font-src 'self'; " +
 	"connect-src 'self'; " +
-	"form-action 'self'; " +
+	"form-action 'self' " + snapOrigins + "; " +
 	"frame-ancestors 'none'; " +
 	"base-uri 'none'; " +
 	"object-src 'none'"

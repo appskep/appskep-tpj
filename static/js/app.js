@@ -34,6 +34,23 @@
     }
   });
 
+  // Escape closes an open drawer — the public mobile menu and the admin sidebar,
+  // both of which are checkbox-driven so that they work with this file blocked.
+  //
+  // This is the one thing the checkbox pattern cannot express in CSS, and it is
+  // pure enhancement: the scrim and the close button still shut the drawer
+  // without it. Generic over [data-drawer] rather than naming the two ids, so a
+  // third drawer needs the attribute and nothing here.
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape") {
+      return;
+    }
+    var open = document.querySelectorAll("input[data-drawer]:checked");
+    for (var i = 0; i < open.length; i++) {
+      open[i].checked = false;
+    }
+  });
+
   // The payment status poller.
   //
   // It lives in the page rather than inside the frame it reloads: Turbo replaces

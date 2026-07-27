@@ -46,7 +46,7 @@
          variants compile to the subsequent-sibling selector (~), so a checkbox
          outside this div could not reach the sidebar nested inside it. sr-only
          takes it out of flow, so it does not disturb the flex row. */}}
-    <input type="checkbox" id="sidebar-toggle" class="peer sr-only">
+    <input type="checkbox" id="sidebar-toggle" data-drawer class="peer sr-only">
 
     {{template "admin_sidebar" .}}
 
@@ -89,8 +89,8 @@
         <li>
           <a href="{{$item.Href}}"
              class="flex items-center gap-3 rounded-field px-3 py-2.5 text-sm font-medium transition
-                    {{if activeNav $path $item.Href}}bg-clay-600 text-paper{{else}}text-paper/70 hover:bg-forest-900 hover:text-paper{{end}}"
-             {{if activeNav $path $item.Href}}aria-current="page"{{end}}>
+                    {{if activeNav $path $item}}bg-clay-600 text-paper{{else}}text-paper/70 hover:bg-forest-900 hover:text-paper{{end}}"
+             {{if activeNav $path $item}}aria-current="page"{{end}}>
             {{icon $item.Icon "h-4.5 w-4.5 shrink-0"}}
             {{$item.Label}}
           </a>

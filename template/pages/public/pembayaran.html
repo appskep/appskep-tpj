@@ -251,9 +251,13 @@
     {{end}}
 
     <div class="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
-      {{/* Answers with a redirect to Midtrans, so Turbo is happy and this form
-           needs no data-turbo="false" — unlike a POST that renders a 200. */}}
-      <form method="post" action="/booking/{{$b.BookingCode}}/pembayaran" data-turbo-frame="_top">
+      {{/* data-turbo="false" because this POST answers with a 303 to Midtrans — a
+           DIFFERENT origin. Turbo submits by fetch(), fetch follows the redirect,
+           and the cross-origin hop fails both connect-src 'self' and CORS:
+           "TypeError: Failed to fetch" in the console and a button that does
+           nothing at all. Turbo's redirect rule only ever covered a same-origin
+           redirect, which it can follow and swap into the document. */}}
+      <form method="post" action="/booking/{{$b.BookingCode}}/pembayaran" data-turbo="false">
         {{csrfField .CSRF}}
         <button type="submit" class="{{template "btn_primary"}} w-full sm:w-auto">
           {{icon "wallet" "h-4 w-4"}}

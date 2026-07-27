@@ -67,9 +67,11 @@
 
 
 {{- define "public_header" -}}
-{{/* The mobile menu is a checkbox toggle rather than JavaScript: it is the only
-     interactive chrome on the page, and Turbo Drive replaces the body on every
-     navigation, which would reset any JS-held open state anyway. */}}
+{{/* The mobile menu is an off-canvas drawer driven by a checkbox rather than by
+     JavaScript: it is the only interactive chrome on the page, and Turbo Drive
+     replaces the body on every navigation, which would reset any JS-held open
+     state anyway. Same idiom as the admin sidebar. app.js adds Escape-to-close
+     on top, which is enhancement — the scrim and the x work without it. */}}
 {{/* print:hidden on the chrome, so Ctrl-P on any public page yields the content
      and not a dark navigation bar. The konfirmasi page is the one people
      actually print, but there is no reason for the rest to print badly. */}}
@@ -88,8 +90,8 @@
       {{range $item := publicNav}}
         <a href="{{$item.Href}}"
            class="rounded-field px-3 py-2 text-sm font-medium transition hover:bg-forest-900
-                  {{if activeNav $path $item.Href}}bg-forest-900 text-paper{{else}}text-paper/75{{end}}"
-           {{if activeNav $path $item.Href}}aria-current="page"{{end}}>
+                  {{if activeNav $path $item}}bg-forest-900 text-paper{{else}}text-paper/75{{end}}"
+           {{if activeNav $path $item}}aria-current="page"{{end}}>
           {{$item.Label}}
         </a>
       {{end}}
@@ -141,31 +143,93 @@
     </div>
   </div>
 
-  <input type="checkbox" id="nav-toggle" class="peer sr-only">
-  <nav class="hidden border-t border-forest-900 peer-checked:block md:!hidden" aria-label="Navigasi utama">
-    <div class="mx-auto flex max-w-6xl flex-col px-4 py-2 sm:px-6">
-      {{range $item := publicNav}}
-        <a href="{{$item.Href}}" class="rounded-field px-3 py-3 text-sm font-medium text-paper/85 transition hover:bg-forest-900">
-          {{$item.Label}}
-        </a>
-      {{end}}
-      {{if .User}}
-        <a href="/profil" class="rounded-field px-3 py-3 text-sm font-medium text-paper/85 transition hover:bg-forest-900">
-          Profil
-        </a>
-        <form method="post" action="/logout">
-          {{csrfField .CSRF}}
-          <button type="submit" class="w-full rounded-field px-3 py-3 text-left text-sm font-medium text-paper/85 transition hover:bg-forest-900">
-            Keluar
-          </button>
-        </form>
-      {{else}}
-        <a href="{{loginURL .Page.Path}}" class="rounded-field px-3 py-3 text-sm font-medium text-paper/85 transition hover:bg-forest-900">
-          Masuk
-        </a>
-      {{end}}
+  {{/* The drawer and its scrim must be SIBLINGS that follow this checkbox:
+       Tailwind's peer-* variants compile to the subsequent-sibling selector (~).
+       Both stay inside <header>, which is sticky z-40 and therefore a stacking
+       context — so the z-40/z-50 below are relative to it, the static header bar
+       is painted over by both, and the body-level skip link still wins over the
+       whole thing. Sticky does not create a containing block for fixed children
+       (only transform/filter/will-change do), so inset-0 is the viewport. */}}
+  <input type="checkbox" id="nav-toggle" data-drawer class="peer sr-only">
+
+  {{/* Scrim: tapping outside the open drawer closes it. */}}
+  <label for="nav-toggle" class="fixed inset-0 z-40 hidden bg-forest-950/60 peer-checked:block md:!hidden">
+    <span class="sr-only">Tutup menu</span>
+  </label>
+
+  {{/* Off-canvas from the right, because the hamburger is at the top right and a
+       panel entering from the left would fly across it.
+
+       invisible/peer-checked:visible is not decoration: without it the links stay
+       in the tab order while parked off-screen. visibility animates alongside the
+       transform, so the slide is unaffected — and prefers-reduced-motion in
+       input.css already zeroes the duration, so it snaps for those who ask. */}}
+  <aside class="invisible fixed inset-y-0 right-0 z-50 flex w-72 max-w-[85vw] translate-x-full flex-col
+                bg-forest-950 text-paper shadow-lifted transition-transform
+                peer-checked:visible peer-checked:translate-x-0 md:!hidden">
+
+    <div class="flex h-16 shrink-0 items-center gap-2 border-b border-forest-900 px-4">
+      <span class="grid h-8 w-8 place-items-center rounded-field bg-clay-600 font-display font-black">T</span>
+      <span class="font-display text-base font-bold">TPJ</span>
+
+      <label for="nav-toggle" class="ml-auto grid h-10 w-10 cursor-pointer place-items-center rounded-field text-paper/70 transition hover:bg-forest-900 hover:text-paper">
+        <span class="sr-only">Tutup menu</span>
+        {{icon "x" "h-5 w-5"}}
+      </label>
     </div>
-  </nav>
+
+    {{/* A distinct label: the desktop nav above is also "Navigasi utama", and
+         both exist in the document at once. */}}
+    <nav class="flex-1 overflow-y-auto px-3 py-3" aria-label="Navigasi seluler">
+      {{$path := .Page.Path}}
+      <ul class="space-y-1">
+        {{range $item := publicNav}}
+          <li>
+            <a href="{{$item.Href}}"
+               class="block rounded-field px-3 py-2.5 text-sm font-medium transition
+                      {{if activeNav $path $item}}bg-clay-600 text-paper{{else}}text-paper/75 hover:bg-forest-900 hover:text-paper{{end}}"
+               {{if activeNav $path $item}}aria-current="page"{{end}}>
+              {{$item.Label}}
+            </a>
+          </li>
+        {{end}}
+
+        {{if .User}}
+          <li>
+            <a href="/profil"
+               class="block rounded-field px-3 py-2.5 text-sm font-medium transition
+                      {{if eq $path "/profil"}}bg-clay-600 text-paper{{else}}text-paper/75 hover:bg-forest-900 hover:text-paper{{end}}"
+               {{if eq $path "/profil"}}aria-current="page"{{end}}>
+              Profil
+            </a>
+          </li>
+          <li>
+            <form method="post" action="/logout">
+              {{csrfField .CSRF}}
+              <button type="submit" class="w-full rounded-field px-3 py-2.5 text-left text-sm font-medium text-paper/75 transition hover:bg-forest-900 hover:text-paper">
+                Keluar
+              </button>
+            </form>
+          </li>
+        {{else}}
+          <li>
+            <a href="{{loginURL .Page.Path}}" class="block rounded-field px-3 py-2.5 text-sm font-medium text-paper/75 transition hover:bg-forest-900 hover:text-paper">
+              Masuk
+            </a>
+          </li>
+        {{end}}
+      </ul>
+    </nav>
+
+    {{/* The primary action. The clay button in the bar is sm:inline-block, so
+         below 640px — exactly where the hamburger lives — this is the only
+         Booking CTA on the page. */}}
+    <div class="shrink-0 border-t border-forest-900 p-3">
+      <a href="/booking" class="block w-full rounded-field bg-clay-600 px-4 py-3 text-center text-sm font-semibold text-paper transition hover:bg-clay-500">
+        Booking
+      </a>
+    </div>
+  </aside>
 </header>
 {{- end -}}
 

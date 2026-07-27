@@ -31,7 +31,7 @@ Sistem booking & pembayaran online: **Go monolith + chi + sqlc + MariaDB + Go ht
 | 9 | Public — Konfirmasi, Riwayat, Profil | DONE | 2026-07-27. Konfirmasi is now the canonical booking page (pembayaran 303s to it, Midtrans `finish` repointed), riwayat with status filter + pagination, profil with avatar upload, and user cancellation that releases the slot **and** cancels the Midtrans order. Zero schema and zero sqlc change — Phase 1 had already written every query. See **Phase 9 notes** below. **M5 complete** |
 | 10 | Admin — Booking, Pembayaran, Dashboard, Users | DONE | 2026-07-27. Dashboard with live figures, booking list + detail + five actions incl. the two-slot reschedule, payments list/detail/re-sync, users with the last-admin guard, settings form, CSV export. Two defects found by verification (sqlc silently mis-binding `BETWEEN`; a template shared between two pages). See **Phase 10 notes** below. M6 needs Phase 11 too |
 | 11 | Notifikasi email | DONE | 2026-07-27. Six transactional emails, an async worker that drains on shutdown, and an H-1 reminder made idempotent by a new `bookings.reminder_sent_at` — the phase's one schema change. Split `mail` (transport) / `service.Email` (rules), mirroring Midtrans. One defect found while writing it (html/template escaping the plain-text part and the Subject header). See **Phase 11 notes** below. **M6 complete** |
-| 12 | Hardening (CSRF, rate limit, validation, errors) | DONE | 2026-07-27. Session-bound CSRF with per-render masking, per-route token buckets over a trusted-proxy client IP, a strict CSP that cost the app its last four inline scripts, a global body cap, and `private, no-store` on authenticated pages. Two defects found by verification (a 403 where a 413 belonged; Turbo's progress-bar stylesheet blocked by `style-src`). **`govulncheck`: 30 stdlib findings, all fixed by a toolchain bump — Phase 14 must build on go1.25.12+.** See **Phase 12 notes** below |
+| 12 | Hardening (CSRF, rate limit, validation, errors) | DONE | 2026-07-27. Session-bound CSRF with per-render masking, per-route token buckets over a trusted-proxy client IP, a strict CSP that cost the app its last four inline scripts, a global body cap, and `private, no-store` on authenticated pages. Two defects found by verification (a 403 where a 413 belonged; Turbo's progress-bar stylesheet blocked by `style-src`), and a third on 2026-07-28 (the pay button dead in a browser: Turbo `fetch()`ing a cross-origin 303 into CORS and `connect-src`; `form-action` also had to name the Snap hosts). **`govulncheck`: 30 stdlib findings, all fixed by a toolchain bump — Phase 14 must build on go1.25.12+.** See **Phase 12 notes** below |
 | 13 | Testing | DONE | 2026-07-28. 33 test files, ~250 tests, in three tiers: pure unit beside the code, DB-backed in `internal/integration`, harness in `internal/testsupport`. Every earlier phase's deferred ask is now permanent, including the concurrency test PLAN.md calls the one that matters most. Stdlib `testing` only. Two real defects found (a 500 on an empty webhook body; a predicate named for a rule it did not implement), and three load-bearing tests proven to fail by breaking the code they guard. CI deferred to Phase 14. See **Phase 13 notes** below |
 | 14 | Deployment & go-live | TODO | |
 
@@ -288,6 +288,14 @@ right assumptions:
   selector** (`:is(:where(.peer):checked~*)`), so the checkbox has to be a *sibling* of every
   element it drives. The admin checkbox was first placed outside the flex wrapper, which made
   the sidebar a nephew rather than a sibling and left the hamburger doing nothing on mobile.
+  Both are now off-canvas drawers with a scrim — the public one entering from the right,
+  because its hamburger sits at the top right. The public drawer lives *inside* the sticky
+  `z-40` header, whose stacking context is what its `z-40` scrim and `z-50` panel are relative
+  to; sticky does not create a containing block for `fixed` children, so `inset-0` is still the
+  viewport. It adds `invisible peer-checked:visible` so a parked panel is not tab-reachable —
+  `visibility` animates alongside the transform, so the slide is unaffected. `Esc` closes any
+  `input[data-drawer]:checked` from `app.js`; that is the only part not expressible in CSS, and
+  it is enhancement only.
 - **No dark mode.** A single committed public look. A theme axis would double the review
   surface of every screen from Phase 4 onward for no user benefit.
 - **No separate `modal` partial.** `confirm.html` is a native `<dialog>`; a modal is the same
@@ -1546,6 +1554,19 @@ intact. Zero CSP violations across all 14 pages in a real browser. Two defects f
   Admitted by SHA-256 hash rather than by `'unsafe-inline'`, which would have permitted every future
   inline style on the site to buy back one. The cost is that re-vendoring Turbo can stale the hash;
   the warning sits in `scripts/build-js.sh`, where someone would do it.
+- **Found later, 2026-07-28: "Bayar sekarang" was dead in a browser** — `TypeError: Failed to
+  fetch` out of Turbo, and nothing at all in the server log. The pay form was left Turbo-driven on
+  the strength of Phase 7's rule that a POST answering with a **redirect** is safe, but that rule
+  only ever held for a *same-origin* redirect. This one is a 303 to Midtrans: Turbo submits by
+  `fetch()`, `fetch` follows the redirect, and the cross-origin hop dies on CORS **and** on this
+  phase's `connect-src 'self'`. Relaxing the CSP would not have fixed it — CORS blocks the fetch
+  either way — so the form takes `data-turbo="false"` and the transport goes back to being a plain
+  browser navigation. `form-action` then had to name the two Snap hosts as well, because Firefox and
+  Safari check that directive on **every redirect hop** and Chrome does not: the browser that
+  reported the bug is the one that would have hidden the second half of it. The comment above the
+  form, the `Pay` doc comment and this file's "no third-party origin appears in the policy" claim
+  all asserted the wrong rule and were corrected together. **Another one only a browser could
+  reveal, and only a second browser could reveal completely** — QA.md's payment step now says so.
 - **`govulncheck` reports 30 findings, all in the Go standard library, none in a dependency.**
   Every one is fixed by a toolchain upgrade — this tree builds with go1.25.1 and the fixes land
   across 1.25.2 to 1.25.12. Not silently bumped here: the toolchain is the build environment's, and

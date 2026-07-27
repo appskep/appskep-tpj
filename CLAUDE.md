@@ -495,8 +495,18 @@ transport only (`Sender`, `SMTPSender`, `NoOp`, MIME assembly) and
   delegated listener in `static/js/app.js`, the only app-level JS in the project. A nonce does not
   cover attribute handlers, so it would not have saved the rewrite. `style-src` admits exactly one
   hash: Turbo's progress-bar stylesheet — **re-derive it after `make js` bumps Turbo**, or the
-  loading bar silently disappears. No third-party origin appears in the policy because none is
+  loading bar silently disappears. No third-party origin appears as a *source*, because none is
   loaded: Snap checkout is a server-side 303 to Midtrans' hosted page, not their `snap.js`.
+  `form-action` is the lone exception — see the next rule.
+- **A form whose POST redirects to another origin needs `data-turbo="false"` too, and its
+  target named in `form-action`.** Turbo submits by `fetch()` and follows the redirect, so a
+  cross-origin hop dies on CORS *and* on `connect-src 'self'` — `TypeError: Failed to fetch`,
+  and the button does nothing. Phase 7's rule ("a form that redirects on success is
+  unaffected") only ever held for a same-origin redirect Turbo can swap into the document.
+  Relaxing the CSP alone would not have fixed it: CORS blocks the fetch regardless, so Turbo
+  has to come off the form. Then `form-action 'self'` becomes the next blocker, because
+  Firefox and Safari check it on **every redirect hop** and Chrome does not — which is why
+  "Bayar sekarang" must be re-checked in Firefox, not only in the browser that reported it.
 - **A poller in `app.js` re-arms on `turbo:load` and stops on `turbo:before-cache`.** It used to
   re-run by being an inline script in a replaced body; loaded once, it needs the events, and
   getting it wrong leaves an interval polling a page the user has left.

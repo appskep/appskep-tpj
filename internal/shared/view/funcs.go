@@ -71,6 +71,11 @@ type NavItem struct {
 	Label string
 	// Icon is a sprite symbol id. Empty for text-only items.
 	Icon string
+	// Exact marks a section index — a link that is a prefix of its siblings and so
+	// matches only its own path, never the subtree beneath it. Without it /admin
+	// highlights "Dasbor" on every admin page, because every one of them starts
+	// with /admin/.
+	Exact bool
 }
 
 // The site navigation, defined here rather than repeated across layouts so the
@@ -87,7 +92,7 @@ var (
 	// Phase 4 onward fills these routes in; the sidebar links to them now so the
 	// chrome is complete and each phase only has to add its handler.
 	adminNav = []NavItem{
-		{Href: "/admin", Label: "Dasbor", Icon: "layout-dashboard"},
+		{Href: "/admin", Label: "Dasbor", Icon: "layout-dashboard", Exact: true},
 		{Href: "/admin/booking", Label: "Booking", Icon: "receipt"},
 		{Href: "/admin/jadwal", Label: "Penjadwalan", Icon: "calendar-days"},
 		{Href: "/admin/layanan", Label: "Layanan", Icon: "sparkles"},
@@ -226,12 +231,14 @@ func (r *Renderer) loginURL(next string) string {
 	return "/login?next=" + url.QueryEscape(next)
 }
 
-// activeNav reports whether a nav item should be marked current. The root link
-// matches only the root path; every other link matches its own subtree, so
-// /layanan/urut-therapeutic still highlights "Layanan".
-func activeNav(current, target string) bool {
-	if target == "/" {
-		return current == "/"
+// activeNav reports whether a nav item should be marked current. A section index
+// — the root link, or any item flagged Exact — matches only its own path; every
+// other link matches its own subtree, so /layanan/urut-therapeutic still
+// highlights "Layanan".
+func activeNav(current string, item NavItem) bool {
+	target := item.Href
+	if item.Exact || target == "/" {
+		return current == target || current == target+"/"
 	}
 	return current == target || strings.HasPrefix(current, target+"/")
 }

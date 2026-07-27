@@ -80,9 +80,13 @@ These are the ones this file exists for.
 - [ ] **Both confirm dialogs open** — the layanan delete and the jadwal bulk
       delete. They are `data-dialog` attributes read by one delegated listener;
       an inline `onclick` would be blocked by the CSP.
-- [ ] **The mobile menus toggle** at 390 in both layouts. They are CSS-only
-      (`peer-checked:`), so the checkbox must be a *sibling* of everything it
-      drives.
+- [ ] **The mobile drawers toggle** at 390 in both layouts — public slides in from
+      the right, admin from the left. They are CSS-only (`peer-checked:`), so the
+      checkbox must be a *sibling* of everything it drives. Close each three ways:
+      the `x`, the scrim, and `Esc` (the last is the one enhancement in `app.js`,
+      keyed off `[data-drawer]`). Tab from the hamburger while **closed** must not
+      land inside the public drawer — that is its `invisible peer-checked:visible`.
+      Resize past the breakpoint with one open: drawer and scrim both vanish.
 - [ ] **Print** `/booking/{code}/konfirmasi`. Header and footer collapse
       (`print:hidden`); the booking code stays.
 - [ ] **A Turbo Stream toggle updates in place** — the layanan active toggle. The
@@ -94,7 +98,11 @@ These are the ones this file exists for.
 
 Sandbox only. `MIDTRANS_ENV` must not be `midtrans.Production`.
 
-- [ ] Book → pay → Snap's hosted page opens (a server-side 303, not `snap.js`).
+- [ ] Book → **press "Bayar sekarang"** → Snap's hosted page opens (a server-side
+      303, not `snap.js`). The console must be clean: this button reached Midtrans by
+      a Turbo `fetch()` once, which fails cross-origin on CORS and `connect-src`.
+      **Repeat in Firefox** — `form-action` is checked on every redirect hop there
+      and not in Chrome, so Chrome alone cannot clear this step.
 - [ ] Complete the sandbox payment → the finish callback lands on
       `/booking/{code}/konfirmasi`.
 - [ ] The status reaches `paid`. On a machine Midtrans cannot call back into, use

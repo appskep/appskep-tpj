@@ -328,8 +328,10 @@ func (h *Booking) Status(w http.ResponseWriter, r *http.Request) {
 // Pay opens (or re-opens) the Midtrans order and sends the customer to it.
 //
 // Same URL as the GET, following the one-URL shape the booking flow settled in
-// Phase 7 — and it answers with a redirect, so Turbo is happy and the form needs
-// no data-turbo="false".
+// Phase 7. It answers with a redirect, but to ANOTHER ORIGIN, which is why the
+// form that reaches here carries data-turbo="false" after all: Turbo would submit
+// by fetch(), follow the 303, and die on CORS and connect-src 'self'. The CSP's
+// form-action names the Snap hosts for the same reason.
 //
 // It never marks anything paid. A Snap URL means the customer was offered a way
 // to pay; only the webhook may conclude that they did (R7).
