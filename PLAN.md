@@ -288,8 +288,9 @@ right assumptions:
   selector** (`:is(:where(.peer):checked~*)`), so the checkbox has to be a *sibling* of every
   element it drives. The admin checkbox was first placed outside the flex wrapper, which made
   the sidebar a nephew rather than a sibling and left the hamburger doing nothing on mobile.
-  Both are now off-canvas drawers with a scrim — the public one entering from the right,
-  because its hamburger sits at the top right. The public drawer lives *inside* the sticky
+  Both are now off-canvas drawers with a scrim, entering from the left under their own
+  hamburger — the public one was on the right until its toggle moved to the far left of the
+  bar to match the admin topbar. The public drawer lives *inside* the sticky
   `z-40` header, whose stacking context is what its `z-40` scrim and `z-50` panel are relative
   to; sticky does not create a containing block for `fixed` children, so `inset-0` is still the
   viewport. It adds `invisible peer-checked:visible` so a parked panel is not tab-reachable —

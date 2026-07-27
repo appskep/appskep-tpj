@@ -80,8 +80,8 @@ These are the ones this file exists for.
 - [ ] **Both confirm dialogs open** — the layanan delete and the jadwal bulk
       delete. They are `data-dialog` attributes read by one delegated listener;
       an inline `onclick` would be blocked by the CSP.
-- [x] **The mobile drawers toggle** at 390 in both layouts — public slides in from
-      the right, admin from the left. They are CSS-only (`peer-checked:`), so the
+- [x] **The mobile drawers toggle** at 390 in both layouts — both slide in from
+      the left, under their hamburger. They are CSS-only (`peer-checked:`), so the
       checkbox must be a *sibling* of everything it drives. Close each three ways:
       the `x`, the scrim, and `Esc` (the last is the one enhancement in `app.js`,
       keyed off `[data-drawer]`). Tab from the hamburger while **closed** must not
