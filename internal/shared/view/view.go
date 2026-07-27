@@ -9,8 +9,11 @@ package view
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -319,13 +322,33 @@ func (r *Renderer) Settings() *service.Settings { return r.settings }
 // assetVersion produces the cache-busting stamp appended to static asset URLs by
 // the asset helper.
 //
-// app.css's modification time is used because it is the one static file that
-// changes on every CSS edit and is rebuilt on every deploy. When it is missing —
-// a checkout where `make tailwind` has not run — the process start time is used,
-// which is correct in development and harmlessly conservative in production.
+// It is a hash of app.css's CONTENT, not its modification time. Production serves
+// /static with `max-age=31536000, immutable`, so the stamp is the only thing that
+// can ever make a browser or a CDN edge fetch the stylesheet again — a stamp that
+// fails to change pins the old file for a year, with no revalidation. An mtime
+// fails to change in more ways than it looks: a deploy that normalises timestamps
+// (rsync without -t, a tar extract, a fresh checkout) can hand back an older
+// value than the one already in circulation, and two rebuilds within the same
+// second are indistinguishable. A content hash changes if and only if the CSS
+// changed, which is also what keeps the cache warm across a redeploy that did not
+// touch the styles.
+//
+// Read once at boot, so a CSS rebuild still needs a restart to reach the HTML —
+// that is what `build: tailwind` in the Makefile and the staleness guard in
+// main.go are for.
+//
+// When the file is missing — a checkout where `make tailwind` has not run — the
+// process start time is used, which is correct in development and harmlessly
+// conservative in production.
 func assetVersion() string {
-	if fi, err := os.Stat("static/css/app.css"); err == nil {
-		return strconv.FormatInt(fi.ModTime().Unix(), 10)
+	f, err := os.Open("static/css/app.css")
+	if err == nil {
+		defer f.Close()
+
+		sum := sha256.New()
+		if _, err := io.Copy(sum, f); err == nil {
+			return hex.EncodeToString(sum.Sum(nil))[:12]
+		}
 	}
 	return strconv.FormatInt(time.Now().Unix(), 10)
 }

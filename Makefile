@@ -11,8 +11,15 @@ MIGRATION   := internal/database/migration
 #
 # .tools/ rather than bin/ so `make clean` does not force a 50MB re-download of a
 # toolchain that has nothing to do with this project's build output.
+#
+# The version is part of the FILENAME, not just this variable. A bare
+# .tools/tailwindcss is a file target make considers satisfied the moment it
+# exists, so bumping TAILWIND_VERSION would silently keep building with whatever
+# binary was already on disk. Production was found on an older v4 exactly that
+# way — its app.css still carried v3's leading-`!` important modifier, which
+# v4.3.3 no longer emits.
 TAILWIND_VERSION := v4.3.3
-TAILWIND_BIN     := .tools/tailwindcss
+TAILWIND_BIN     := .tools/tailwindcss-$(TAILWIND_VERSION)
 CSS_IN           := static/css/input.css
 CSS_OUT          := static/css/app.css
 
@@ -30,7 +37,14 @@ MYSQL_ARGS := -h $(or $(DB_HOST),127.0.0.1) -P $(or $(DB_PORT),3306) -u $(or $(D
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-build: ## Compile the server binary into bin/
+# The CSS is a build output, not a side quest: `static/css/app.css` is gitignored,
+# so it never arrives with a `git pull`, and Tailwind generates only the classes
+# it finds in template/. A binary built without it is paired with whatever CSS was
+# last produced on that machine — which is how production ended up serving a
+# stylesheet missing every class unique to the public mobile drawer, while the
+# rest of the site looked fine. Making it a prerequisite costs ~80ms and removes
+# the deploy step someone has to remember.
+build: tailwind ## Compile the server binary into bin/ (rebuilds the CSS first)
 	go build -o $(BINARY) $(PKG)
 
 run: build ## Build and run once

@@ -1723,6 +1723,27 @@ locking; and property-based testing of the money parsers, where the table alread
 - [ ] Set `TRUSTED_PROXIES` to the reverse proxy's address. Left empty it is safe but the rate
       limits and the request log see the proxy as every client, so one visitor can exhaust the
       budget for all of them.
+- [ ] **The deploy order is templates → `make tailwind` → restart → purge the CDN,** and it is
+      not a preference. `static/css/app.css` is **gitignored**, so it never arrives with a
+      `git pull`; Tailwind generates only the classes it finds in `template/`, so a CSS built
+      against an older tree is missing exactly the utilities the newest markup added and
+      nothing else. That is a site which looks 99% right with one feature silently inert —
+      invisible to curl, to the suite and to the logs. **This already happened in production:**
+      seven classes were missing, all of them unique to the public mobile drawer's `<aside>`
+      and scrim, so the hamburger flipped its checkbox and nothing appeared, while the admin
+      sidebar (whose classes were all present) worked.
+      Three things now defend it, and the runbook still has to get the order right:
+      `build: tailwind` makes the CSS a build output rather than a step to remember;
+      `checkStylesheetFresh` in `main.go` refuses to boot production when `app.css` is older
+      than the newest template; and `view.assetVersion` hashes the CSS instead of stating it.
+      **The restart is load-bearing** — the stamp is read once at boot, and `/static` is served
+      `max-age=31536000, immutable`, so a rebuild without a restart pins the old file in every
+      browser and CDN edge for a year with no revalidation.
+- [ ] **Pin the Tailwind CLI by filename on every host.** `TAILWIND_BIN` is
+      `.tools/tailwindcss-$(TAILWIND_VERSION)` for a reason: a bare path is a file target make
+      considers satisfied the moment it exists, so a version bump silently keeps building with
+      whatever binary is on disk. Production was found on an older v4 exactly that way. Delete
+      any legacy `.tools/tailwindcss` on the servers.
 - [ ] `Dockerfile` (multi-stage, distroless/alpine, `-ldflags "-s -w"`) or systemd unit — match existing Appskep deployment practice
 - [ ] Embed templates & static assets (`embed.go`) so the binary ships standalone
 - [ ] Production `.env` checklist (all secrets set, `ENV=production`)

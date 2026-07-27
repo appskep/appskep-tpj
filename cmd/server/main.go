@@ -7,10 +7,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -107,6 +109,13 @@ func run() error {
 
 	avatars, err := upload.New(staticDir, avatarImageDir, maxAvatarBytes)
 	if err != nil {
+		return err
+	}
+
+	// A stylesheet older than the templates it dresses is a failed boot in
+	// production, for the same reason a malformed template is: it is a defect no
+	// request will report. See checkStylesheetFresh.
+	if err := checkStylesheetFresh(cfg, log); err != nil {
 		return err
 	}
 
@@ -287,6 +296,76 @@ func openDB(cfg *config.Config) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+// stylesheet is the Tailwind build output, relative to the working directory.
+const stylesheet = staticDir + "/css/app.css"
+
+// checkStylesheetFresh refuses to boot production with a stylesheet older than
+// the templates it dresses.
+//
+// Tailwind generates only the classes it finds in template/, so an app.css built
+// against an older tree is missing precisely the utilities the newest markup
+// added — and nothing else. The result is a site that is 99% styled with one
+// feature silently inert, which is invisible to curl, invisible to the test
+// suite, and invisible in the logs. Production served exactly that for the public
+// mobile drawer: seven classes missing, all of them unique to that one element,
+// so the hamburger flipped its checkbox and nothing appeared. Because app.css is
+// gitignored it cannot arrive with a `git pull`, and because /static is served
+// `immutable` for a year the stale copy sticks.
+//
+// `build: tailwind` in the Makefile is what stops this happening; this is the
+// check that catches it happening anyway — a deploy that copies a binary without
+// rebuilding, or a working tree edited after the last build.
+//
+// Development only warns: editing a template with the server already running is
+// the normal loop there, and `make dev` has Tailwind watching alongside it.
+func checkStylesheetFresh(cfg *config.Config, log *slog.Logger) error {
+	css, err := os.Stat(stylesheet)
+	if err != nil {
+		if cfg.IsProduction() {
+			return fmt.Errorf("stat %s: %w (run `make tailwind`)", stylesheet, err)
+		}
+		log.Warn("stylesheet missing, the site will render unstyled",
+			slog.String("path", stylesheet),
+			slog.String("fix", "make tailwind"))
+		return nil
+	}
+
+	var newest time.Time
+	var newestPath string
+	err = filepath.WalkDir(templateDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		fi, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if fi.ModTime().After(newest) {
+			newest, newestPath = fi.ModTime(), p
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("scanning %s: %w", templateDir, err)
+	}
+
+	if !newest.After(css.ModTime()) {
+		return nil
+	}
+
+	if cfg.IsProduction() {
+		return fmt.Errorf(
+			"%s is older than %s (%s vs %s): the CSS was built against different templates, run `make tailwind`",
+			stylesheet, newestPath,
+			css.ModTime().Format(time.RFC3339), newest.Format(time.RFC3339))
+	}
+	log.Error("stylesheet is older than the templates: classes added since the last build are missing",
+		slog.String("stylesheet", stylesheet),
+		slog.String("newer_template", newestPath),
+		slog.String("fix", "make tailwind"))
+	return nil
 }
 
 func newLogger(cfg *config.Config) *slog.Logger {

@@ -12,7 +12,7 @@ before starting work, and tick a task the moment it is executed and verified.
 |---|---|
 | `make dev` | Hot-reload server via air (builds Tailwind first) |
 | `make run` | Build + run once |
-| `make build` | Compile to `bin/server` |
+| `make build` | Rebuild the CSS, then compile to `bin/server` |
 | `make test` | Whole suite, `-race -count=1`. **Needs MariaDB** — a missing one fails rather than skips |
 | `make test-unit` | `-short`: only the tests that need no database |
 | `make db-test-drop` / `make db-test-shell` | Drop / inspect the test database (`make test` recreates it) |
@@ -24,7 +24,7 @@ before starting work, and tick a task the moment it is executed and verified.
 | `make seed` | Load `seed_dev.sql` |
 | `make db-reset` | Drop + create + migrate (destructive, dev only) |
 | `make db-fresh` | `db-reset` + `seed` — **the loop to run after any schema edit** |
-| `make tailwind` / `make tailwind-watch` | Build / watch `static/css/app.css` (downloads the pinned CLI into `bin/` on first run) |
+| `make tailwind` / `make tailwind-watch` | Build / watch `static/css/app.css` (downloads the pinned CLI into `.tools/tailwindcss-<version>` on first run) |
 | `make assets` | Re-vendor the icon sprite, fonts and Turbo — only when a version or the icon list changes |
 
 Server listens on `SERVER_PORT` (default 8080). Health check: `GET /api/health`.
@@ -75,6 +75,19 @@ sprite and the woff2 fonts are committed under `static/`; `make assets` re-fetch
 ## Conventions
 
 - **Generated code is never hand-edited.** Change the `.sql` and run `make sqlc`.
+- **`static/css/app.css` is a build output and ships with the binary, never with git.**
+  It is gitignored, and Tailwind emits only the classes it finds in `template/` — so a CSS
+  built against an older tree is missing exactly the utilities the newest markup added and
+  nothing else. That is a site 99% styled with one feature silently inert, which curl, the
+  suite and the logs all miss. Production shipped that for the public mobile drawer: seven
+  classes gone, every one of them unique to its `<aside>` and scrim. Three defences, all
+  load-bearing: `build: tailwind` makes the CSS a build output rather than a remembered step;
+  `checkStylesheetFresh` in `main.go` refuses to boot production when `app.css` is older than
+  the newest template; `view.assetVersion` hashes the file's content instead of stating its
+  mtime. **A CSS rebuild still needs a process restart** — the stamp is read once at boot and
+  `/static` is served `immutable` for a year, so without one the stale copy is pinned in every
+  browser and CDN edge. `TAILWIND_BIN` carries the version in its filename because a bare path
+  is a make file-target that a version bump would silently leave stale.
 - **`0001_schema.sql` is the single source of truth until go-live.** `make migrate` re-pipes
   every `0*.sql` on each run, so it is re-runnable but blind to edits — change a column by
   editing that file and running `make db-fresh`. No `0002_*.sql` before Phase 14; after
