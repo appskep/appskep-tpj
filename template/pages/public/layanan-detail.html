@@ -125,15 +125,12 @@
         </section>
       {{end}}
 
+      {{/* Coverage, not a venue: the therapist travels to the customer, so this
+           line names the area served rather than an address to come to. */}}
       {{if .Site.Address}}
         <p class="mt-8 flex items-start gap-2 text-sm text-ink-soft">
           {{icon "map-pin" "mt-0.5 h-4 w-4 shrink-0"}}
-          <span>
-            {{.Site.Address}}
-            {{if .Site.MapsURL}}
-              — <a href="{{.Site.MapsURL}}" rel="noopener noreferrer" target="_blank" class="font-medium text-clay-600 transition hover:text-clay-700">lihat peta</a>
-            {{end}}
-          </span>
+          <span>Terapis datang ke lokasimu — {{.Site.Address}}</span>
         </p>
       {{end}}
     </div>

@@ -33,7 +33,7 @@
     <p style="margin:0 0 12px;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#56645b;">
       Ada pertanyaan? Balas email ini{{if .Site.WhatsApp}} atau <a href="{{.Site.WhatsApp}}" style="color:#96431f;">hubungi kami di WhatsApp</a>{{end}}.
     </p>
-    {{if .Site.Address}}<p style="margin:0 0 4px;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#56645b;">{{.Site.Address}}</p>{{end}}
+    {{if .Site.Address}}<p style="margin:0 0 4px;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#56645b;">Area layanan: {{.Site.Address}}</p>{{end}}
     {{if .Site.ContactPhone}}<p style="margin:0 0 12px;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#56645b;">{{.Site.ContactPhone}}</p>{{end}}
     <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8a9690;">
       Email ini dikirim otomatis oleh {{.Site.Name}} karena ada aktivitas pada booking Anda.
@@ -74,6 +74,12 @@
           <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#56645b;">Atas nama</td>
           <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#1b2a22;font-weight:600;">{{.Booking.Customer}}</td>
         </tr>
+        {{if .Booking.Address}}
+          <tr>
+            <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#56645b;vertical-align:top;">Alamat</td>
+            <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#1b2a22;font-weight:600;">{{.Booking.Address}}</td>
+          </tr>
+        {{end}}
         <tr>
           <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#56645b;">Biaya</td>
           <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#1b2a22;font-weight:600;">{{rupiah .Booking.Amount}}</td>
@@ -101,12 +107,13 @@ Layanan      : {{.Booking.Service}}
 Tanggal      : {{dateID .Booking.Date}}
 Waktu        : {{timeRange .Booking.StartTime .Booking.EndTime}} WIB ({{duration .Booking.Duration}})
 Atas nama    : {{.Booking.Customer}}
-Biaya        : {{rupiah .Booking.Amount}}{{end}}
+{{if .Booking.Address}}Alamat       : {{.Booking.Address}}
+{{end}}Biaya        : {{rupiah .Booking.Amount}}{{end}}
 
 {{define "email_footer_text"}}
 --
 Ada pertanyaan? Balas email ini{{if .Site.WhatsApp}} atau hubungi kami di WhatsApp: {{.Site.WhatsApp}}{{end}}.
-{{if .Site.Address}}{{.Site.Address}}
+{{if .Site.Address}}Area layanan: {{.Site.Address}}
 {{end}}{{if .Site.ContactPhone}}{{.Site.ContactPhone}}
 {{end}}
 Email ini dikirim otomatis oleh {{.Site.Name}} karena ada aktivitas pada booking Anda.{{end}}

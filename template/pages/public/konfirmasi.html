@@ -39,7 +39,7 @@
     <p class="text-xs uppercase tracking-wide text-ink-soft">Kode booking</p>
     <p class="mt-1 font-display text-3xl font-bold tracking-wide">{{$b.BookingCode}}</p>
     <p class="mt-2 text-sm text-ink-soft">
-      Sebutkan kode ini saat datang. Dibuat {{dateTimeID $b.CreatedAt}}.
+      Sebutkan kode ini saat terapis tiba. Dibuat {{dateTimeID $b.CreatedAt}}.
     </p>
   </div>
 
@@ -52,7 +52,7 @@
       <div class="min-w-0">
         <p class="text-sm font-semibold">Pembayaran diterima. Jadwal kamu sudah terkunci.</p>
         <p class="mt-1 text-sm text-ink-soft">
-          Datang 10 menit lebih awal pada {{dateID $b.SlotDate}}, {{timeRange $b.SlotStartTime $b.SlotEndTime}}.
+          Terapis datang ke alamatmu pada {{dateID $b.SlotDate}}, {{timeRange $b.SlotStartTime $b.SlotEndTime}}.
         </p>
       </div>
     </div>
@@ -140,12 +140,13 @@
         <dt class="text-ink-soft">Telepon</dt>
         <dd class="text-right">{{$b.CustomerPhone}}</dd>
       </div>
-      {{if $b.CustomerAddress.Valid}}
-        <div class="flex justify-between gap-4 py-3">
-          <dt class="shrink-0 text-ink-soft">Alamat</dt>
-          <dd class="text-right">{{nullstr $b.CustomerAddress}}</dd>
-        </div>
-      {{end}}
+      {{/* The address is where the therapist goes, so it is always shown. Bookings
+           taken before the home-visit copy landed may have none — those render a
+           dash rather than an empty row that reads like a rendering fault. */}}
+      <div class="flex justify-between gap-4 py-3">
+        <dt class="shrink-0 text-ink-soft">Alamat terapi</dt>
+        <dd class="text-right">{{if $b.CustomerAddress.Valid}}{{nullstr $b.CustomerAddress}}{{else}}—{{end}}</dd>
+      </div>
       {{if $b.Notes.Valid}}
         <div class="flex justify-between gap-4 py-3">
           <dt class="shrink-0 text-ink-soft">Catatan</dt>
@@ -190,20 +191,20 @@
           </li>
           <li class="flex gap-3">
             <span class="grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-line text-xs font-bold text-ink-soft">2</span>
-            <span>Datang 10 menit lebih awal pada {{dateID $b.SlotDate}}, {{timeRange $b.SlotStartTime $b.SlotEndTime}}.</span>
+            <span>Terapis datang ke alamatmu pada {{dateID $b.SlotDate}}, {{timeRange $b.SlotStartTime $b.SlotEndTime}}.</span>
           </li>
           <li class="flex gap-3">
             <span class="grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-line text-xs font-bold text-ink-soft">3</span>
-            <span>Sebutkan kode <span class="font-semibold text-ink">{{$b.BookingCode}}</span> di resepsionis.</span>
+            <span>Sebutkan kode <span class="font-semibold text-ink">{{$b.BookingCode}}</span> kepada terapis saat dia tiba.</span>
           </li>
         {{else}}
           <li class="flex gap-3">
             <span class="grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-clay-600 text-xs font-bold text-paper">1</span>
-            <span>Datang 10 menit lebih awal pada {{dateID $b.SlotDate}}, {{timeRange $b.SlotStartTime $b.SlotEndTime}}.</span>
+            <span>Terapis datang ke alamatmu pada {{dateID $b.SlotDate}}, {{timeRange $b.SlotStartTime $b.SlotEndTime}}.</span>
           </li>
           <li class="flex gap-3">
             <span class="grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-line text-xs font-bold text-ink-soft">2</span>
-            <span>Sebutkan kode <span class="font-semibold text-ink">{{$b.BookingCode}}</span> di resepsionis.</span>
+            <span>Sebutkan kode <span class="font-semibold text-ink">{{$b.BookingCode}}</span> kepada terapis saat dia tiba.</span>
           </li>
         {{end}}
       </ol>

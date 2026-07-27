@@ -200,16 +200,16 @@
               {{end}}
             </div>
 
-            {{/* Alamat */}}
+            {{/* Alamat — required, because it is where the therapist goes. */}}
             <div>
-              <label for="alamat" class="block text-sm font-semibold">
-                Alamat <span class="font-normal text-ink-faint">(opsional)</span>
-              </label>
-              <textarea id="alamat" name="alamat" rows="2" maxlength="500" autocomplete="street-address"
+              <label for="alamat" class="block text-sm font-semibold">Alamat lengkap</label>
+              <textarea id="alamat" name="alamat" rows="2" maxlength="500" autocomplete="street-address" required
                         class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
                                {{if index .Data.Errors "alamat"}}border-danger{{else}}border-line{{end}}">{{.Data.Form.Alamat}}</textarea>
               {{with index .Data.Errors "alamat"}}
                 <p class="mt-1 text-sm text-danger">{{.}}</p>
+              {{else}}
+                <p class="mt-1 text-xs text-ink-faint">Alamat tujuan terapis. Sertakan patokan atau nomor kamar kalau ada.</p>
               {{end}}
             </div>
 
@@ -269,12 +269,10 @@
               <dt class="text-ink-soft">Telepon</dt>
               <dd class="text-right font-semibold">{{.Data.Form.Telepon}}</dd>
             </div>
-            {{with .Data.Form.Alamat}}
-              <div class="flex justify-between gap-4 py-3">
-                <dt class="shrink-0 text-ink-soft">Alamat</dt>
-                <dd class="text-right">{{.}}</dd>
-              </div>
-            {{end}}
+            <div class="flex justify-between gap-4 py-3">
+              <dt class="shrink-0 text-ink-soft">Alamat terapi</dt>
+              <dd class="text-right">{{.Data.Form.Alamat}}</dd>
+            </div>
             {{with .Data.Form.Catatan}}
               <div class="flex justify-between gap-4 py-3">
                 <dt class="shrink-0 text-ink-soft">Catatan</dt>

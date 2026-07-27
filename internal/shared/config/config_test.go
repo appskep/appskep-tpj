@@ -39,7 +39,7 @@ var configKeys = []string{
 	"AUTH_URL", "AUTH_SECRET", "AUTH_CLIENT_ID", "ADMIN_USER_IDS",
 	"SESSION_KEY", "SESSION_NAME", "SESSION_MAX_AGE", "SESSION_SECURE",
 	"MIDTRANS_ENV", "MIDTRANS_SERVER_KEY", "MIDTRANS_CLIENT_KEY", "MIDTRANS_PREFIX",
-	"PAYMENT_EXPIRY_MINUTES", "MIDTRANS_TIMEOUT",
+	"MIDTRANS_ENABLED_PAYMENTS", "PAYMENT_EXPIRY_MINUTES", "MIDTRANS_TIMEOUT",
 	"SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD",
 	"SMTP_FROM_NAME", "SMTP_FROM_EMAIL", "SMTP_TIMEOUT",
 }
@@ -100,6 +100,50 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if !cfg.IsDevelopment() || cfg.IsProduction() {
 		t.Error("ENV=development did not select development")
+	}
+}
+
+// TestLoadResolvesEnabledPayments covers the one setting whose default is not
+// "whatever the upstream does". Unset must mean QRIS alone — a single channel is
+// what makes Snap skip its method picker — because the fallback of sending
+// nothing offers whatever ANOTHER Appskep system turned on for the shared
+// merchant account.
+func TestLoadResolvesEnabledPayments(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  []string
+	}{
+		{name: "unset", value: "", want: []string{"qris"}},
+		{name: "explicit single", value: "qris", want: []string{"qris"}},
+		{
+			name: "wallet deeplinks alongside qris", value: "qris, gopay ,shopeepay",
+			want: []string{"qris", "gopay", "shopeepay"},
+		},
+		// The escape hatch: send no enabled_payments at all, so a channel that is
+		// not active on the shared account can be worked around from .env.
+		{name: "all", value: "all", want: nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			setMinimum(t)
+			t.Setenv("MIDTRANS_ENABLED_PAYMENTS", tc.value)
+
+			cfg, err := config.Load()
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			got := cfg.Midtrans.EnabledPayments
+			if len(got) != len(tc.want) {
+				t.Fatalf("EnabledPayments = %v, want %v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Fatalf("EnabledPayments = %v, want %v", got, tc.want)
+				}
+			}
+		})
 	}
 }
 
@@ -215,6 +259,17 @@ func TestLoadValidation(t *testing.T) {
 			// would build "tpj--" and match nothing we ever mint.
 			name: "prefix with a dash", key: "MIDTRANS_PREFIX", value: "tpj-x",
 			want: "MIDTRANS_PREFIX",
+		},
+		{
+			// A channel Midtrans does not recognise is rejected for every
+			// transaction, so "Bayar sekarang" would fail for every customer with
+			// nothing wrong in our own logs.
+			name: "unknown payment channel", key: "MIDTRANS_ENABLED_PAYMENTS", value: "qriss",
+			want: "MIDTRANS_ENABLED_PAYMENTS",
+		},
+		{
+			name: "one bad channel among good ones", key: "MIDTRANS_ENABLED_PAYMENTS",
+			value: "qris,gopay,paypal", want: "MIDTRANS_ENABLED_PAYMENTS",
 		},
 		{
 			// A malformed list must be a failed boot, not a silently empty one: the

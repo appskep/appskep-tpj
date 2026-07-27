@@ -323,12 +323,11 @@ func (b *Booking) validate(ctx context.Context, in CreateInput) (parsedBooking, 
 		phone(ve, "telepon", p.phone)
 	}
 
-	// Alamat — optional. This clinic receives customers at its own address, so an
-	// address is useful context rather than a delivery requirement.
-	if addr := strings.TrimSpace(in.Address); addr != "" {
-		if maxLen(ve, "alamat", "Alamat", addr, maxCustomerAddressLen) {
-			p.address = sql.NullString{String: addr, Valid: true}
-		}
+	// Alamat — required. The therapist travels to the customer, so this is the
+	// destination, not context: a booking without one cannot be carried out.
+	addr := strings.TrimSpace(in.Address)
+	if requiredMaxLen(ve, "alamat", "Alamat", addr, maxCustomerAddressLen) {
+		p.address = sql.NullString{String: addr, Valid: true}
 	}
 
 	// Catatan — optional.

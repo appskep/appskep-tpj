@@ -97,9 +97,13 @@ func (h *Page) Landing(w http.ResponseWriter, r *http.Request) {
 			{Icon: "sparkles", Title: "Pilih layanan", Body: "Urut, massage, atau bekam therapeutic. Harga dan durasinya tertulis jelas."},
 			{Icon: "calendar-days", Title: "Pilih jadwal", Body: "Lihat slot yang masih kosong dan ambil yang paling pas."},
 			{Icon: "credit-card", Title: "Bayar online", Body: "Transfer, QRIS, atau kartu. Slot kamu ditahan sampai pembayaran selesai."},
-			{Icon: "check-circle", Title: "Datang terapi", Body: "Bawa kode booking. Hadir 10 menit sebelum jadwal."},
+			{Icon: "check-circle", Title: "Terapis datang", Body: "Terapis datang ke alamatmu sesuai jadwal. Sebutkan kode bookingmu saat dia tiba."},
 		},
 		FAQs: []faq{
+			{
+				Q: "Terapinya di mana?",
+				A: "Di tempat kamu — rumah atau kos. Terapis yang datang, membawa peralatannya sendiri. Kamu cukup menyiapkan ruang yang cukup untuk berbaring.",
+			},
 			{
 				Q: "Berapa lama satu sesi terapi?",
 				A: "Berbeda-beda per layanan. Durasinya tertulis di tiap kartu layanan dan di halaman layanannya, termasuk konsultasi singkat di awal.",

@@ -135,10 +135,18 @@
         Booking
       </a>
 
-      {{/* Mobile menu toggle. */}}
+      {{/* Mobile menu toggle.
+
+           pointer-events-none on the icon is load-bearing, not tidiness: the
+           icon fills the middle of the 40x40 label, so a tap lands on the <use>
+           element inside the sprite <svg>, and WebKit does not forward label
+           activation from SVG content — the checkbox never flips and the drawer
+           does nothing at all. Making the icon transparent to hit-testing puts
+           the <label> itself under every tap. Same reason it is on the x below
+           and on the admin sidebar toggle. */}}
       <label for="nav-toggle" class="grid h-10 w-10 cursor-pointer place-items-center rounded-field transition hover:bg-forest-900 md:hidden">
         <span class="sr-only">Buka menu</span>
-        {{icon "menu" "h-5 w-5"}}
+        {{icon "menu" "h-5 w-5 pointer-events-none"}}
       </label>
     </div>
   </div>
@@ -152,8 +160,16 @@
        (only transform/filter/will-change do), so inset-0 is the viewport. */}}
   <input type="checkbox" id="nav-toggle" data-drawer class="peer sr-only">
 
-  {{/* Scrim: tapping outside the open drawer closes it. */}}
-  <label for="nav-toggle" class="fixed inset-0 z-40 hidden bg-forest-950/60 peer-checked:block md:!hidden">
+  {{/* Scrim: tapping outside the open drawer closes it.
+
+       md:hidden! carries the important modifier because peer-checked:block
+       compiles to `.peer-checked\:block:is(:where(.peer):checked~*)` — two
+       classes' worth of specificity — and md:hidden is one. A media query adds
+       none, so without the ! a drawer left open while the window is widened
+       keeps a full-screen scrim over the desktop layout. The ! is TRAILING:
+       Tailwind v4 dropped v3's leading form, and `md:!hidden` compiles to
+       nothing at all — silently, which is how it survived this long. */}}
+  <label for="nav-toggle" class="fixed inset-0 z-40 hidden bg-forest-950/60 peer-checked:block md:hidden!">
     <span class="sr-only">Tutup menu</span>
   </label>
 
@@ -161,12 +177,14 @@
        panel entering from the left would fly across it.
 
        invisible/peer-checked:visible is not decoration: without it the links stay
-       in the tab order while parked off-screen. visibility animates alongside the
-       transform, so the slide is unaffected — and prefers-reduced-motion in
-       input.css already zeroes the duration, so it snaps for those who ask. */}}
+       in the tab order while parked off-screen. visibility must be named in the
+       transition explicitly — transition-transform covers transform/translate/
+       scale/rotate and nothing else, so on close the panel would blink out
+       instead of sliding. prefers-reduced-motion in input.css already zeroes the
+       duration, so it snaps for those who ask. */}}
   <aside class="invisible fixed inset-y-0 right-0 z-50 flex w-72 max-w-[85vw] translate-x-full flex-col
-                bg-forest-950 text-paper shadow-lifted transition-transform
-                peer-checked:visible peer-checked:translate-x-0 md:!hidden">
+                bg-forest-950 text-paper shadow-lifted transition-[transform,visibility]
+                peer-checked:visible peer-checked:translate-x-0 md:hidden!">
 
     <div class="flex h-16 shrink-0 items-center gap-2 border-b border-forest-900 px-4">
       <span class="grid h-8 w-8 place-items-center rounded-field bg-clay-600 font-display font-black">T</span>
@@ -174,7 +192,7 @@
 
       <label for="nav-toggle" class="ml-auto grid h-10 w-10 cursor-pointer place-items-center rounded-field text-paper/70 transition hover:bg-forest-900 hover:text-paper">
         <span class="sr-only">Tutup menu</span>
-        {{icon "x" "h-5 w-5"}}
+        {{icon "x" "h-5 w-5 pointer-events-none"}}
       </label>
     </div>
 
@@ -281,7 +299,7 @@
             <li class="flex items-start gap-2">{{icon "mail" "mt-0.5 h-4 w-4 shrink-0"}}<a href="mailto:{{.Site.Email}}" class="transition hover:text-paper">{{.Site.Email}}</a></li>
           {{end}}
           {{if .Site.Address}}
-            <li class="flex items-start gap-2">{{icon "map-pin" "mt-0.5 h-4 w-4 shrink-0"}}<span>{{.Site.Address}}</span></li>
+            <li class="flex items-start gap-2">{{icon "map-pin" "mt-0.5 h-4 w-4 shrink-0"}}<span>Area layanan: {{.Site.Address}}</span></li>
           {{end}}
         </ul>
       </div>

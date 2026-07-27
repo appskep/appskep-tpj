@@ -45,7 +45,6 @@ const (
 	KeyContactAddress       = "contact_address"
 	KeyWhatsAppNumber       = "whatsapp_number"
 	KeyInstagramURL         = "instagram_url"
-	KeyMapsURL              = "maps_url"
 	KeyBookingTerms         = "booking_terms"
 	KeyBookingLeadMinutes   = "booking_lead_time_minutes"
 	KeyBookingMaxDaysAhead  = "booking_max_days_ahead"
@@ -167,10 +166,9 @@ var EditableSettings = []SettingField{
 	{Key: KeySiteOGImage, Label: "Gambar Open Graph (path)", MaxLen: 255},
 	{Key: KeyContactEmail, Label: "Email kontak", MaxLen: 150},
 	{Key: KeyContactPhone, Label: "Telepon kontak", MaxLen: 30},
-	{Key: KeyContactAddress, Label: "Alamat", MaxLen: 300, Multiline: true},
+	{Key: KeyContactAddress, Label: "Area layanan", MaxLen: 300, Multiline: true},
 	{Key: KeyWhatsAppNumber, Label: "Nomor WhatsApp", MaxLen: 30},
 	{Key: KeyInstagramURL, Label: "URL Instagram", MaxLen: 255},
-	{Key: KeyMapsURL, Label: "URL Google Maps", MaxLen: 500},
 	{Key: KeyBookingTerms, Label: "Ketentuan booking", MaxLen: 1000, Multiline: true},
 	{Key: KeyBookingLeadMinutes, Label: "Jeda minimum booking (menit)", Numeric: true, Min: 0, Max: 10080},
 	{Key: KeyBookingMaxDaysAhead, Label: "Maksimal hari ke depan", Numeric: true, Min: 1, Max: 365},

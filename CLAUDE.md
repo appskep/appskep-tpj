@@ -289,6 +289,13 @@ never by a Snap token response or a client-side callback. See
   report `RowsAffected() == 1` before the booking transition is attempted, and the booking
   transition must report 1 before `ReleaseSlot`. This is what makes a Midtrans retry, the
   expiry ticker and a user cancellation all reach the same booking harmlessly.
+- **Payment channels are scoped per transaction via `enabled_payments`**, from
+  `MIDTRANS_ENABLED_PAYMENTS` (default `qris`), because the account-wide channel list
+  belongs to another Appskep system. **A single entry makes Snap skip its method picker**
+  and open that channel's page directly — which is the point of the QRIS-only default, not
+  a side effect. `all` sends no field at all and restores the account's list. An unknown
+  channel name fails the boot: Midtrans would otherwise reject every transaction with
+  nothing wrong in our logs.
 - **The Snap request carries an `expiry` derived from the booking's remaining hold**, so
   Midtrans stops accepting payment at the moment the ticker releases the slot. Without it
   Midtrans defaults to 24 hours and will take money for a slot someone else now has.

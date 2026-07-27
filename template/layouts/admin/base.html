@@ -33,10 +33,11 @@
     Lompat ke konten
   </a>
 
-  {{/* min-h-screen, not min-h-full: a percentage height resolves against body,
-       which is only min-height-constrained, so the sidebar would stop at the
-       height of the content instead of reaching the bottom of the viewport. */}}
-  <div class="flex min-h-screen">
+  {{/* The sidebar is fixed at every width, so it is out of flow and this wrapper
+       has exactly one in-flow child. lg:pl-64 is what reserves the 16rem the
+       sidebar occupies — remove it and the content slides underneath. Below lg
+       there is no padding because the sidebar is off-canvas there. */}}
+  <div class="min-h-screen lg:pl-64">
 
     {{/* Checkbox-driven sidebar, for the same reason as the public mobile menu:
          Turbo Drive replaces the body on navigation, so JS-held state would reset
@@ -45,17 +46,25 @@
          The checkbox must be a SIBLING of everything it drives: Tailwind's peer-*
          variants compile to the subsequent-sibling selector (~), so a checkbox
          outside this div could not reach the sidebar nested inside it. sr-only
-         takes it out of flow, so it does not disturb the flex row. */}}
+         takes it out of flow, so it adds no height of its own. */}}
     <input type="checkbox" id="sidebar-toggle" data-drawer class="peer sr-only">
 
     {{template "admin_sidebar" .}}
 
-    {{/* Scrim: tapping outside the open sidebar closes it. */}}
-    <label for="sidebar-toggle" class="fixed inset-0 z-20 hidden bg-forest-950/50 peer-checked:block lg:!hidden">
+    {{/* Scrim: tapping outside the open sidebar closes it.
+
+         lg:hidden! carries the important modifier because peer-checked:block
+         compiles to `.peer-checked\:block:is(:where(.peer):checked~*)` — two
+         classes' worth of specificity — and lg:hidden is one. A media query adds
+         none, so without the ! a sidebar left open while the window is widened
+         keeps a full-screen scrim over the desktop layout. The ! is TRAILING:
+         Tailwind v4 dropped v3's leading form, and `lg:!hidden` compiles to
+         nothing at all — silently, which is how it survived this long. */}}
+    <label for="sidebar-toggle" class="fixed inset-0 z-20 hidden bg-forest-950/50 peer-checked:block lg:hidden!">
       <span class="sr-only">Tutup menu</span>
     </label>
 
-    <div class="flex min-w-0 flex-1 flex-col">
+    <div class="flex min-h-screen flex-col">
       {{template "admin_topbar" .}}
 
       {{if .Flash}}
@@ -75,7 +84,12 @@
 
 
 {{- define "admin_sidebar" -}}
-<aside class="fixed inset-y-0 left-0 z-30 flex w-64 -translate-x-full flex-col bg-forest-950 text-paper transition-transform peer-checked:translate-x-0 lg:static lg:translate-x-0">
+{{/* Fixed at every width, not lg:static: on a long page (jadwal, bookings) an
+     in-flow sidebar scrolls away and the operator loses the nav. inset-y-0 makes
+     it exactly viewport-tall, so the flex-1 overflow-y-auto <nav> below gets its
+     own scrollbar when the item list outgrows a short window. The content column
+     reserves the width with lg:pl-64. */}}
+<aside class="fixed inset-y-0 left-0 z-30 flex w-64 -translate-x-full flex-col bg-forest-950 text-paper transition-transform peer-checked:translate-x-0 lg:translate-x-0">
 
   <a href="/admin" class="flex h-16 shrink-0 items-center gap-2 px-5 font-display text-base font-bold">
     <span class="grid h-8 w-8 place-items-center rounded-field bg-clay-600 font-black">T</span>
@@ -112,9 +126,12 @@
 {{- define "admin_topbar" -}}
 <header class="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-3 border-b border-line bg-paper px-4 sm:px-6 lg:px-8">
 
+  {{/* pointer-events-none on the icon: see the public header's toggle. A tap in
+       the middle of the label lands on the sprite's <use> element, and WebKit
+       does not forward label activation from SVG content. */}}
   <label for="sidebar-toggle" class="grid h-10 w-10 cursor-pointer place-items-center rounded-field text-ink-soft transition hover:bg-paper-2 lg:hidden">
     <span class="sr-only">Buka menu</span>
-    {{icon "menu" "h-5 w-5"}}
+    {{icon "menu" "h-5 w-5 pointer-events-none"}}
   </label>
 
   <h1 class="min-w-0 truncate font-display text-lg font-bold">{{.Page.Title}}</h1>

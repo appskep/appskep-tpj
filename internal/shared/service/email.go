@@ -166,6 +166,9 @@ type EmailBooking struct {
 	Duration  int32
 	Amount    string
 	URL       string
+	// Address is where the therapist goes. Empty for bookings taken before the
+	// field became required, so every template renders it conditionally.
+	Address string
 	// ExpiresAt is the payment deadline, zero when the booking has none.
 	ExpiresAt time.Time
 }
@@ -519,6 +522,7 @@ func (e *Email) data(j emailJob, row sqlc.GetBookingAdminDetailRow) EmailData {
 			EndTime:   row.SlotEndTime,
 			Duration:  row.ServiceDurationMinutes,
 			Amount:    row.PriceAmount,
+			Address:   nullText(row.CustomerAddress),
 			// Konfirmasi, not pembayaran: it is the canonical page for a booking in
 			// any status, and pembayaran 303s here for anything but pending_payment
 			// (Phase 9). A mail read a week later must still land somewhere useful.

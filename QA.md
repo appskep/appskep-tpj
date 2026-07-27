@@ -80,13 +80,22 @@ These are the ones this file exists for.
 - [ ] **Both confirm dialogs open** — the layanan delete and the jadwal bulk
       delete. They are `data-dialog` attributes read by one delegated listener;
       an inline `onclick` would be blocked by the CSP.
-- [ ] **The mobile drawers toggle** at 390 in both layouts — public slides in from
+- [x] **The mobile drawers toggle** at 390 in both layouts — public slides in from
       the right, admin from the left. They are CSS-only (`peer-checked:`), so the
       checkbox must be a *sibling* of everything it drives. Close each three ways:
       the `x`, the scrim, and `Esc` (the last is the one enhancement in `app.js`,
       keyed off `[data-drawer]`). Tab from the hamburger while **closed** must not
       land inside the public drawer — that is its `invisible peer-checked:visible`.
       Resize past the breakpoint with one open: drawer and scrim both vanish.
+      Two things this found, both invisible outside a browser: the hide-past-the-
+      breakpoint class needs Tailwind v4's **trailing** `!` (`md:hidden!` — the v3
+      leading form compiles to nothing, silently, and `peer-checked:block` outranks
+      a plain `md:hidden` on specificity); and the icon inside each toggle needs
+      `pointer-events-none`, or a tap lands on the sprite's `<use>` and WebKit
+      never activates the label.
+- [ ] **Tap the hamburger in Safari and on a real iPhone**, not only in Chrome.
+      The `<label>`-over-SVG hit target above behaves differently there, and that
+      is the one difference a headless Chrome run cannot see.
 - [ ] **Print** `/booking/{code}/konfirmasi`. Header and footer collapse
       (`print:hidden`); the booking code stays.
 - [ ] **A Turbo Stream toggle updates in place** — the layanan active toggle. The
@@ -103,6 +112,12 @@ Sandbox only. `MIDTRANS_ENV` must not be `midtrans.Production`.
       a Turbo `fetch()` once, which fails cross-origin on CORS and `connect-src`.
       **Repeat in Firefox** — `form-action` is checked on every redirect hop there
       and not in Chrome, so Chrome alone cannot clear this step.
+- [ ] **The Snap page opens straight on the QRIS screen — no method picker.**
+      `MIDTRANS_ENABLED_PAYMENTS=qris` is a single channel, and Snap skips its
+      list when there is only one. A picker here means the field never reached
+      Midtrans; a channel that errors means QRIS is not active on the shared
+      merchant account, which `MIDTRANS_ENABLED_PAYMENTS=all` will confirm in
+      seconds. curl sees a 303 either way and can clear neither.
 - [ ] Complete the sandbox payment → the finish callback lands on
       `/booking/{code}/konfirmasi`.
 - [ ] The status reaches `paid`. On a machine Midtrans cannot call back into, use

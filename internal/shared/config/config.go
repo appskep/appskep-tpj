@@ -184,6 +184,14 @@ type MidtransConfig struct {
 	Prefix string
 	// ExpiryMinutes is how long an unpaid booking holds its slot.
 	ExpiryMinutes int
+	// EnabledPayments are the Snap channel names sent as enabled_payments on
+	// every transaction. Empty means the field is omitted and the customer is
+	// offered whatever the account has active — which on a SHARED account is
+	// whatever another Appskep system turned on, so it is not the default.
+	//
+	// A single entry makes Snap skip its method picker and open that channel's
+	// page directly, which is why the default is exactly ["qris"].
+	EnabledPayments []string
 	// Timeout bounds one call to the Midtrans API. It must stay well under
 	// SERVER_WRITE_TIMEOUT: a customer pressing "Bayar sekarang" waits on this
 	// call, and a Midtrans that never answers must not hold the request open
@@ -212,6 +220,34 @@ func (m MidtransConfig) OwnsOrderID(orderID string) bool {
 // IsProduction reports whether Midtrans should run against the production API.
 func (m MidtransConfig) IsProduction() bool {
 	return m.Env == "midtrans.Production"
+}
+
+// midtransPaymentsAll is the escape hatch: MIDTRANS_ENABLED_PAYMENTS=all sends
+// no enabled_payments at all, restoring the account-wide channel list. It exists
+// so a channel that turns out not to be active on the shared account can be
+// worked around from .env rather than from a deploy.
+const midtransPaymentsAll = "all"
+
+// midtransPayments are the Snap channel names Midtrans accepts in
+// enabled_payments. The strings are written out rather than taken from the SDK
+// for two reasons: config imports nothing from the payment provider, the same
+// way Env carries the literal "midtrans.Production"; and the pinned SDK v1.3.8
+// predates "qris" and "other_qris", which Midtrans has accepted for years.
+//
+// An unknown value here is a Snap page that errors for every customer, so it
+// fails the boot instead.
+var midtransPayments = map[string]bool{
+	"qris": true, "other_qris": true,
+	"gopay": true, "shopeepay": true,
+	"credit_card":   true,
+	"bank_transfer": true,
+	"bca_va":        true, "bni_va": true, "bri_va": true,
+	"permata_va": true, "other_va": true, "echannel": true,
+	"cstore": true, "indomaret": true, "alfamart": true, "kioson": true,
+	"akulaku": true, "kredivo": true, "danamon_online": true, "uob_ezpay": true,
+	"bca_klikbca": true, "bca_klikpay": true, "bri_epay": true,
+	"cimb_clicks": true, "mandiri_clickpay": true, "mandiri_ecash": true,
+	"telkomsel_cash": true,
 }
 
 type SMTPConfig struct {
@@ -322,6 +358,19 @@ func Load() (*Config, error) {
 	// The driver needs the resolved location, which is only available here.
 	cfg.DB.Loc = loc
 	cfg.DB.TZOffset = utcOffset(loc)
+
+	// Not in the struct literal above because getStringSlice has no fallback
+	// parameter. Unset means QRIS alone, which is also what makes Snap open the
+	// QR page directly instead of a method picker; "all" is the escape hatch back
+	// to the account's own list.
+	cfg.Midtrans.EnabledPayments = getStringSlice("MIDTRANS_ENABLED_PAYMENTS")
+	switch {
+	case len(cfg.Midtrans.EnabledPayments) == 0:
+		cfg.Midtrans.EnabledPayments = []string{"qris"}
+	case len(cfg.Midtrans.EnabledPayments) == 1 &&
+		cfg.Midtrans.EnabledPayments[0] == midtransPaymentsAll:
+		cfg.Midtrans.EnabledPayments = nil
+	}
 
 	// A malformed TRUSTED_PROXIES is a failed boot, not a silently empty list:
 	// the difference between the two is whether the rate limiter can be bypassed
@@ -444,6 +493,15 @@ func (c *Config) validate() error {
 	// "tpj--" and match nothing we ever mint.
 	if c.Midtrans.Prefix == "" || strings.Contains(c.Midtrans.Prefix, "-") {
 		problems = append(problems, "MIDTRANS_PREFIX is required and must not contain '-'")
+	}
+	// A channel Midtrans does not recognise is rejected for every transaction,
+	// so "Bayar sekarang" would fail for every customer with nothing wrong in
+	// our own logs. Cheaper to catch here than in production.
+	for _, p := range c.Midtrans.EnabledPayments {
+		if !midtransPayments[p] {
+			problems = append(problems, "MIDTRANS_ENABLED_PAYMENTS contains unknown channel "+
+				strconv.Quote(p))
+		}
 	}
 	if c.DB.Name == "" {
 		problems = append(problems, "DB_NAME is required")

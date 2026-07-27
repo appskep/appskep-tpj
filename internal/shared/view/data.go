@@ -59,10 +59,11 @@ type Site struct {
 	URL         string
 	Email       string
 	Phone       string
-	Address     string
-	WhatsApp    string
-	Instagram   string
-	MapsURL     string
+	// Address is the area served, not a venue: the therapist travels to the
+	// customer, so nothing renders it as a place to come to.
+	Address   string
+	WhatsApp  string
+	Instagram string
 	// OGImage is the fallback social preview for pages with no image of their
 	// own. Settings-driven and seeded empty: no default asset ships with the
 	// repo, so this stays inert until someone sets it from the settings form.
@@ -134,7 +135,6 @@ func (r *Renderer) siteFrom(s *service.Settings) Site {
 		Address:      s.String(service.KeyContactAddress, ""),
 		WhatsApp:     s.String(service.KeyWhatsAppNumber, ""),
 		Instagram:    s.String(service.KeyInstagramURL, ""),
-		MapsURL:      s.String(service.KeyMapsURL, ""),
 		OGImage:      s.String(service.KeySiteOGImage, ""),
 		AssetVersion: r.assetVersion,
 		Year:         time.Now().In(r.cfg.App.Location).Year(),

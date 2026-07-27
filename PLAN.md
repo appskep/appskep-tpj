@@ -1032,6 +1032,18 @@ Departures from the task list, and the reasoning:
   fragment**, because Turbo does not execute scripts inserted into a frame. Whether to
   continue is still the server's decision, carried as `data-poll` on a wrapper inside the
   frame; a booking that reaches a final state stops the loop on the next tick.
+- **Payment channels were scoped to QRIS on 2026-07-28, after the phase closed.** The Snap
+  request set no `enabled_payments`, so the page offered every channel the *shared* merchant
+  account has active — another Appskep system's configuration, reaching our customers.
+  `MIDTRANS_ENABLED_PAYMENTS` (default `qris`) now sends the list per transaction, the only
+  lever available given nothing account-wide may be changed. A single entry is deliberate
+  beyond the channel choice: **Snap skips its method picker when only one channel is enabled**,
+  so "Bayar sekarang" lands the customer on the QR and its countdown with nothing to click.
+  `all` sends no field and restores the account list — the escape hatch for a channel that
+  turns out not to be active. An unrecognised name fails the boot, because Midtrans would
+  otherwise reject every transaction with nothing wrong in our own logs. Building the request
+  moved into `Midtrans.snapRequest` so the body can be marshalled and asserted without a
+  network; before this, nothing tested the request at all.
 - **No schema change.** `0001_schema.sql` stayed frozen and no query file was edited — Phase 1
   wrote every query this phase needed, guarded and commented for it. The only generated-code
   change is the `raw_response` override above.

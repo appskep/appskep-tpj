@@ -2,11 +2,14 @@ package integration
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/remorac/appskep-tpj/internal/database/sqlc"
 	"github.com/remorac/appskep-tpj/internal/shared/payment"
+	"github.com/remorac/appskep-tpj/internal/shared/service"
 	"github.com/remorac/appskep-tpj/internal/testsupport"
 )
 
@@ -213,6 +216,43 @@ func TestBookToExpiredEndToEnd(t *testing.T) {
 	}
 	if got := env.BookedCount(slot.ID); got != 1 {
 		t.Errorf("booked_count = %d after the re-booking, want 1", got)
+	}
+
+	env.AssertInvariant()
+}
+
+// TestBookingRequiresAddress guards the rule the home-visit model turns on: the
+// therapist travels to the customer, so a booking with no address names no
+// destination and must not reach the slot lock.
+//
+// It asserts the slot is untouched as well as the error, because the failure
+// that matters is not "the message is missing" but "a slot was held for a visit
+// nobody can make".
+func TestBookingRequiresAddress(t *testing.T) {
+	env := testsupport.New(t)
+
+	user := env.User(8920)
+	slot := env.FutureSlot(3, 1)
+
+	_, err := env.Deps.Booking.Create(context.Background(), service.CreateInput{
+		UserID:      user.ID,
+		ServiceSlug: testsupport.SlugUrut,
+		SlotID:      fmt.Sprint(slot.ID),
+		Name:        "Budi Santoso",
+		Phone:       "081234567890",
+		Address:     "   ", // whitespace only: trimmed, so still empty
+	})
+
+	var ve *service.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("Create without an address = %v, want a ValidationError", err)
+	}
+	if _, ok := ve.Fields["alamat"]; !ok {
+		t.Errorf("the error names %v, want a message on \"alamat\"", ve.Fields)
+	}
+
+	if got := env.BookedCount(slot.ID); got != 0 {
+		t.Errorf("booked_count = %d after a rejected booking, want 0", got)
 	}
 
 	env.AssertInvariant()

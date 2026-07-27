@@ -34,8 +34,8 @@ func TestHarness(t *testing.T) {
 	if got := env.CountRows("services", ""); got != 3 {
 		t.Errorf("seeded services = %d, want 3", got)
 	}
-	if got := env.CountRows("settings", ""); got != 21 {
-		t.Errorf("seeded settings = %d, want 21", got)
+	if got := env.CountRows("settings", ""); got != 20 {
+		t.Errorf("seeded settings = %d, want 20", got)
 	}
 	// seed_dev.sql:84-87 — no bookings and no payments are seeded, deliberately,
 	// so the concurrency test starts from a clean counter.

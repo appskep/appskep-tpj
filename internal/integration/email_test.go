@@ -58,7 +58,10 @@ func TestBookingCreatedIsNotified(t *testing.T) {
 
 	user := env.User(9970)
 	slot := env.FutureSlot(3, 1)
-	booking := env.Booking(testsupport.BookingInput{UserID: user.ID, SlotID: slot.ID})
+	const address = "Jl. Kaliurang KM 5 No. 12, Sleman"
+	booking := env.Booking(testsupport.BookingInput{
+		UserID: user.ID, SlotID: slot.ID, Address: address,
+	})
 
 	drain(t, env)
 
@@ -86,6 +89,15 @@ func TestBookingCreatedIsNotified(t *testing.T) {
 	}
 	if !strings.Contains(m.HTML, booking.BookingCode) {
 		t.Error("the HTML body does not name the booking code")
+	}
+	// The therapist travels to the customer, so the address is the one fact a
+	// booking mail cannot be useful without — and it has to survive both template
+	// sets, which are separate {{define}}s carrying their own copy of the block.
+	if !strings.Contains(m.HTML, address) {
+		t.Error("the HTML body does not name the address the therapist goes to")
+	}
+	if !strings.Contains(m.Text, address) {
+		t.Error("the text body does not name the address the therapist goes to")
 	}
 }
 

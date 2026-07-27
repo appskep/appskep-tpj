@@ -2,6 +2,7 @@ package payment
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"net/http"
@@ -43,6 +44,108 @@ func TestNewMidtransFailsSafe(t *testing.T) {
 				t.Errorf("MIDTRANS_ENV=%q selected %v, want %v", tc.env, m.env, tc.want)
 			}
 		})
+	}
+}
+
+// TestSnapRequestEnabledPayments asserts the wire body, not the struct: the
+// field is omitempty, so "the slice is empty" and "the key is absent" are the
+// same thing to Midtrans and only the JSON says which happened.
+//
+// Sending the channels per transaction is the only lever available — the
+// merchant account is shared, and its account-wide channel list belongs to
+// another Appskep system.
+func TestSnapRequestEnabledPayments(t *testing.T) {
+	order := Order{
+		ID:            "tpj-11111111-2222-3333-4444-555555555555",
+		GrossAmount:   75000,
+		ItemID:        "1",
+		ItemName:      "Terapi Lutut",
+		CustomerName:  "Ari",
+		CustomerEmail: "ari@example.com",
+	}
+
+	t.Run("qris alone", func(t *testing.T) {
+		// One channel is what makes Snap skip its method picker and open the QR
+		// page directly. Two would restore the picker, which is why the count
+		// matters as much as the value.
+		m := NewMidtrans(config.MidtransConfig{
+			ServerKey:       "k",
+			Timeout:         time.Second,
+			EnabledPayments: []string{"qris"},
+		})
+
+		body, err := json.Marshal(m.snapRequest(order))
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if got, want := string(body), `"enabled_payments":["qris"]`; !strings.Contains(got, want) {
+			t.Errorf("snap request = %s\nwant it to contain %s", got, want)
+		}
+	})
+
+	t.Run("several channels keep their order", func(t *testing.T) {
+		m := NewMidtrans(config.MidtransConfig{
+			ServerKey:       "k",
+			Timeout:         time.Second,
+			EnabledPayments: []string{"qris", "gopay", "shopeepay"},
+		})
+
+		body, err := json.Marshal(m.snapRequest(order))
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		want := `"enabled_payments":["qris","gopay","shopeepay"]`
+		if got := string(body); !strings.Contains(got, want) {
+			t.Errorf("snap request = %s\nwant it to contain %s", got, want)
+		}
+	})
+
+	t.Run("none omits the field", func(t *testing.T) {
+		// MIDTRANS_ENABLED_PAYMENTS=all. An empty array would mean "no channel at
+		// all" to Midtrans; the key has to be absent for the account's own list to
+		// apply.
+		m := NewMidtrans(config.MidtransConfig{ServerKey: "k", Timeout: time.Second})
+
+		body, err := json.Marshal(m.snapRequest(order))
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if strings.Contains(string(body), "enabled_payments") {
+			t.Errorf("snap request = %s\nwant no enabled_payments key at all", body)
+		}
+	})
+}
+
+// TestSnapRequestKeepsItsOtherFields guards the extraction of snapRequest out of
+// CreateTransaction: everything the Snap page shows is decided here, and the
+// only other place to read it is Midtrans' hosted page.
+func TestSnapRequestKeepsItsOtherFields(t *testing.T) {
+	m := NewMidtrans(config.MidtransConfig{ServerKey: "k", Timeout: time.Second})
+
+	req := m.snapRequest(Order{
+		ID:          "tpj-abc",
+		GrossAmount: 75000,
+		ItemID:      "1",
+		ItemName:    "Terapi Lutut",
+		FinishURL:   "https://tpj.test/booking/TPJ-1/konfirmasi",
+		Expiry:      90 * time.Second,
+	})
+
+	if req.TransactionDetails.OrderID != "tpj-abc" || req.TransactionDetails.GrossAmt != 75000 {
+		t.Errorf("transaction_details = %+v", req.TransactionDetails)
+	}
+	// Exactly one item priced at the gross amount: Midtrans rejects the request
+	// when the item prices do not sum to gross_amount.
+	if req.Items == nil || len(*req.Items) != 1 || (*req.Items)[0].Price != 75000 {
+		t.Errorf("item_details = %+v", req.Items)
+	}
+	if req.Callbacks == nil || req.Callbacks.Finish == "" {
+		t.Error("callbacks.finish is not set; Snap would use the shared account's redirect")
+	}
+	// Truncated, never rounded up: Midtrans must stop accepting payment before
+	// the ticker releases the slot.
+	if req.Expiry == nil || req.Expiry.Duration != 1 || req.Expiry.Unit != "minute" {
+		t.Errorf("expiry = %+v, want 1 minute", req.Expiry)
 	}
 }
 

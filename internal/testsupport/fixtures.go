@@ -186,6 +186,10 @@ func (e *Env) Booking(in BookingInput) sqlc.Booking {
 	if in.Phone == "" {
 		in.Phone = "081234567890"
 	}
+	// Required since the copy fix: the therapist travels to this address.
+	if in.Address == "" {
+		in.Address = "Jl. Kaliurang KM 5 No. 12, Sleman"
+	}
 
 	booking, err := e.Deps.Booking.Create(context.Background(), service.CreateInput{
 		UserID:      in.UserID,

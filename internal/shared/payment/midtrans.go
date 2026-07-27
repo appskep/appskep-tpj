@@ -44,6 +44,10 @@ type Midtrans struct {
 	serverKey string
 	env       midtrans.EnvironmentType
 	timeout   time.Duration
+	// enabledPayments scopes the Snap page to the channels TPJ accepts. It is
+	// per transaction because the merchant account is shared: its account-wide
+	// channel list belongs to another Appskep system and must not be touched.
+	enabledPayments []snap.SnapPaymentType
 }
 
 // NewMidtrans builds the gateway from configuration.
@@ -57,7 +61,19 @@ func NewMidtrans(cfg config.MidtransConfig) *Midtrans {
 	if cfg.IsProduction() {
 		env = midtrans.Production
 	}
-	return &Midtrans{serverKey: cfg.ServerKey, env: env, timeout: cfg.Timeout}
+	// SnapPaymentType is a bare string type, so a channel the pinned SDK has no
+	// constant for — "qris", which predates v1.3.8 by years — converts like any
+	// other. config validated the names; this only changes their type.
+	var payments []snap.SnapPaymentType
+	for _, p := range cfg.EnabledPayments {
+		payments = append(payments, snap.SnapPaymentType(p))
+	}
+	return &Midtrans{
+		serverKey:       cfg.ServerKey,
+		env:             env,
+		timeout:         cfg.Timeout,
+		enabledPayments: payments,
+	}
 }
 
 // ServerKey exposes the key the signature check needs. It is not otherwise read
@@ -70,6 +86,42 @@ func (m *Midtrans) CreateTransaction(ctx context.Context, o Order) (*Charge, err
 	ctx, cancel := context.WithTimeout(ctx, m.timeout)
 	defer cancel()
 
+	req := m.snapRequest(o)
+
+	client := m.snapClient(ctx)
+	if o.NotificationURL != "" {
+		// X-Append-Notification, not X-Override-Notification: the account-wide
+		// notification URL points at another Appskep system on this shared
+		// merchant account, and overriding it would silently stop their
+		// payments from being confirmed.
+		client.Options.SetPaymentAppendNotification(o.NotificationURL)
+	}
+
+	res, merr := client.CreateTransaction(req)
+	if merr != nil {
+		return nil, wrap("creating snap transaction", merr)
+	}
+	if res == nil {
+		return nil, fmt.Errorf("payment: snap returned no response for %s", o.ID)
+	}
+	if res.RedirectURL == "" {
+		// Midtrans answers a rejected request with 2xx and error_messages more
+		// often than with a status code, so the absence of a URL is the real
+		// failure signal.
+		return nil, fmt.Errorf("payment: snap returned no redirect url for %s: %s",
+			o.ID, strings.Join(res.ErrorMessages, "; "))
+	}
+
+	return &Charge{Token: res.Token, RedirectURL: res.RedirectURL}, nil
+}
+
+// snapRequest builds the Snap transaction body for one order.
+//
+// Separate from CreateTransaction so the assembled request can be marshalled and
+// asserted without a network: everything that decides what the customer is shown
+// lives here, and the only alternative to reading it in a test is reading it on
+// Midtrans' hosted page.
+func (m *Midtrans) snapRequest(o Order) *snap.Request {
 	req := &snap.Request{
 		TransactionDetails: midtrans.TransactionDetails{
 			OrderID:  o.ID,
@@ -101,32 +153,15 @@ func (m *Midtrans) CreateTransaction(ctx context.Context, o Order) (*Charge, err
 		// before our ticker releases the slot, never after.
 		req.Expiry = &snap.ExpiryDetails{Unit: "minute", Duration: exp}
 	}
-
-	client := m.snapClient(ctx)
-	if o.NotificationURL != "" {
-		// X-Append-Notification, not X-Override-Notification: the account-wide
-		// notification URL points at another Appskep system on this shared
-		// merchant account, and overriding it would silently stop their
-		// payments from being confirmed.
-		client.Options.SetPaymentAppendNotification(o.NotificationURL)
+	if len(m.enabledPayments) > 0 {
+		// Scoping the channels is per transaction, never account-wide, because
+		// the merchant account is shared. A single entry also makes Snap skip its
+		// method picker and open that channel's page directly — which is the
+		// whole point of the QRIS-only default.
+		req.EnabledPayments = m.enabledPayments
 	}
 
-	res, merr := client.CreateTransaction(req)
-	if merr != nil {
-		return nil, wrap("creating snap transaction", merr)
-	}
-	if res == nil {
-		return nil, fmt.Errorf("payment: snap returned no response for %s", o.ID)
-	}
-	if res.RedirectURL == "" {
-		// Midtrans answers a rejected request with 2xx and error_messages more
-		// often than with a status code, so the absence of a URL is the real
-		// failure signal.
-		return nil, fmt.Errorf("payment: snap returned no redirect url for %s: %s",
-			o.ID, strings.Join(res.ErrorMessages, "; "))
-	}
-
-	return &Charge{Token: res.Token, RedirectURL: res.RedirectURL}, nil
+	return req
 }
 
 // GetStatus asks Midtrans what happened to an order.

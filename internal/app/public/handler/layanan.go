@@ -59,7 +59,7 @@ func (h *Layanan) List(w http.ResponseWriter, r *http.Request) {
 	h.deps.View.Render(w, r, http.StatusOK, "public/layanan", &view.View{
 		Page: view.Page{
 			Title:       "Layanan",
-			Description: "Urut, massage, dan bekam therapeutic. Harga, durasi, dan jadwalnya tertulis jelas — pilih yang paling pas untuk keluhanmu.",
+			Description: "Urut, massage, dan bekam therapeutic ke rumah atau kos. Harga, durasi, dan jadwalnya tertulis jelas — pilih yang paling pas untuk keluhanmu.",
 		},
 		Data: listData{
 			Services: services,

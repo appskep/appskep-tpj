@@ -772,7 +772,7 @@ func (h *Booking) render(w http.ResponseWriter, r *http.Request, status int, dat
 	h.deps.View.Render(w, r, status, "public/booking", &view.View{
 		Page: view.Page{
 			Title:       title,
-			Description: "Pilih layanan, jadwal, dan isi data untuk booking terapi di Terapi Pemuda Jompo.",
+			Description: "Pilih layanan, jadwal, dan isi alamat untuk booking terapi ke rumah bersama Terapi Pemuda Jompo.",
 			NoIndex:     true,
 		},
 		Data: data,
