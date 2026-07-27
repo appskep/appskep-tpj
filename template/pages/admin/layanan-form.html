@@ -1,0 +1,183 @@
+{{/*
+  Admin — tambah / ubah layanan.
+
+  One template for both, driven by .Data.IsNew: the fields are identical and the
+  only differences are where the form posts and whether there is a slug and an
+  image to show. Two files would be the same markup maintained twice.
+
+  Every value comes from .Data.Form, which holds what was submitted rather than
+  what was parsed, so a rejected save re-renders exactly what the admin typed.
+  The topbar already renders the page title as the h1.
+
+  The file name is layanan-form.html, not layanan/form.html: the renderer globs
+  pages/admin/*.html without recursing, so a subdirectory would be invisible.
+*/}}
+{{- define "content" -}}
+
+<form method="post" action="{{.Data.Action}}" enctype="multipart/form-data" class="max-w-3xl">
+  {{csrfField .CSRF}}
+
+  <div class="rounded-card border border-line bg-paper p-6">
+    <h2 class="font-display text-lg font-bold">Detail layanan</h2>
+
+    <div class="mt-5 grid gap-5">
+
+      {{/* Nama */}}
+      <div>
+        <label for="name" class="block text-sm font-semibold">Nama layanan</label>
+        <input type="text" id="name" name="name" value="{{.Data.Form.Name}}" required maxlength="150"
+               class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                      {{if index .Data.Errors "name"}}border-danger{{else}}border-line{{end}}">
+        {{with index .Data.Errors "name"}}
+          <p class="mt-1 text-sm text-danger">{{.}}</p>
+        {{end}}
+        {{if .Data.IsNew}}
+          <p class="mt-1 text-xs text-ink-faint">
+            Alamat halaman dibuat otomatis dari nama ini dan tidak berubah lagi setelah disimpan.
+          </p>
+        {{end}}
+      </div>
+
+      {{/* Slug — read-only. It is the public URL of the service, so it is
+           generated once at creation and never follows a rename: changing it
+           would break every existing link with nothing redirecting them. */}}
+      {{if not .Data.IsNew}}
+        <div>
+          <span class="block text-sm font-semibold">Alamat halaman</span>
+          <p class="mt-1.5 flex items-center gap-2 rounded-field bg-paper-2 px-3 py-2.5 text-sm text-ink-soft">
+            <span class="truncate">/layanan/{{.Data.Service.Slug}}</span>
+            <span class="ml-auto shrink-0 rounded-pill bg-paper px-2 py-0.5 text-xs font-semibold text-ink-faint">permanen</span>
+          </p>
+        </div>
+      {{end}}
+
+      {{/* Deskripsi */}}
+      <div>
+        <label for="description" class="block text-sm font-semibold">Deskripsi</label>
+        <textarea id="description" name="description" rows="4"
+                  class="mt-1.5 w-full rounded-field border border-line bg-paper px-3 py-2.5 text-sm">{{.Data.Form.Description}}</textarea>
+        <p class="mt-1 text-xs text-ink-faint">Muncul di kartu layanan dan halaman detail.</p>
+      </div>
+
+      <div class="grid gap-5 sm:grid-cols-2">
+        {{/* Harga */}}
+        <div>
+          <label for="price" class="block text-sm font-semibold">Harga</label>
+          <div class="relative mt-1.5">
+            <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-faint">Rp</span>
+            <input type="text" id="price" name="price" value="{{.Data.Form.Price}}" required
+                   inputmode="numeric" autocomplete="off"
+                   class="w-full rounded-field border bg-paper py-2.5 pl-9 pr-3 text-sm
+                          {{if index .Data.Errors "price"}}border-danger{{else}}border-line{{end}}">
+          </div>
+          {{with index .Data.Errors "price"}}
+            <p class="mt-1 text-sm text-danger">{{.}}</p>
+          {{else}}
+            <p class="mt-1 text-xs text-ink-faint">Contoh: 150000 atau 150.000</p>
+          {{end}}
+        </div>
+
+        {{/* Durasi */}}
+        <div>
+          <label for="duration" class="block text-sm font-semibold">Durasi (menit)</label>
+          <input type="number" id="duration" name="duration" value="{{.Data.Form.Duration}}" required
+                 min="15" max="480" step="5"
+                 class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                        {{if index .Data.Errors "duration"}}border-danger{{else}}border-line{{end}}">
+          {{with index .Data.Errors "duration"}}
+            <p class="mt-1 text-sm text-danger">{{.}}</p>
+          {{else}}
+            <p class="mt-1 text-xs text-ink-faint">Antara 15 dan 480 menit. Standar: 150 (2,5 jam).</p>
+          {{end}}
+        </div>
+      </div>
+
+      {{/* Urutan — a number rather than drag-and-drop: the list is short, and a
+           draggable order needs JavaScript state that Turbo Drive would discard
+           on the next navigation anyway. */}}
+      <div class="sm:max-w-[12rem]">
+        <label for="sort_order" class="block text-sm font-semibold">Urutan tampil</label>
+        <input type="number" id="sort_order" name="sort_order" value="{{.Data.Form.SortOrder}}" min="0" step="1"
+               class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                      {{if index .Data.Errors "sort_order"}}border-danger{{else}}border-line{{end}}">
+        {{with index .Data.Errors "sort_order"}}
+          <p class="mt-1 text-sm text-danger">{{.}}</p>
+        {{else}}
+          <p class="mt-1 text-xs text-ink-faint">Angka kecil tampil lebih dulu.</p>
+        {{end}}
+      </div>
+    </div>
+  </div>
+
+  {{/* Gambar */}}
+  <div class="mt-5 rounded-card border border-line bg-paper p-6">
+    <h2 class="font-display text-lg font-bold">Gambar</h2>
+
+    <div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start">
+      <span class="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-card bg-paper-2 text-ink-faint">
+        {{if .Data.Service.ImagePath.Valid}}
+          <img src="/static/{{nullstr .Data.Service.ImagePath}}" alt="Gambar {{.Data.Service.Name}}"
+               width="112" height="112" class="h-full w-full object-cover">
+        {{else}}
+          {{icon "image" "h-6 w-6"}}
+        {{end}}
+      </span>
+
+      <div class="min-w-0 flex-1">
+        <label for="image" class="block text-sm font-semibold">Unggah gambar</label>
+        <input type="file" id="image" name="image" accept="image/jpeg,image/png,image/webp"
+               class="mt-1.5 w-full rounded-field border border-line bg-paper px-3 py-2.5 text-sm
+                      file:mr-3 file:rounded-field file:border-0 file:bg-paper-2 file:px-3 file:py-1.5
+                      file:text-sm file:font-semibold file:text-ink">
+        {{with index .Data.Errors "image"}}
+          <p class="mt-1 text-sm text-danger">{{.}}</p>
+        {{else}}
+          <p class="mt-1 text-xs text-ink-faint">JPG, PNG, atau WEBP. Maksimal 2 MB.</p>
+        {{end}}
+
+        {{if .Data.Service.ImagePath.Valid}}
+          <label class="mt-3 flex items-center gap-2 text-sm">
+            <input type="checkbox" name="remove_image" value="1"
+                   class="h-4 w-4 rounded border-line text-clay-600">
+            Hapus gambar saat ini
+          </label>
+        {{end}}
+      </div>
+    </div>
+  </div>
+
+  {{/* Status */}}
+  <div class="mt-5 rounded-card border border-line bg-paper p-6">
+    <h2 class="font-display text-lg font-bold">Status</h2>
+
+    <div class="mt-4 grid gap-3">
+      <label class="flex items-start gap-3 text-sm">
+        <input type="checkbox" name="is_active" value="1" {{if .Data.Form.IsActive}}checked{{end}}
+               class="mt-0.5 h-4 w-4 rounded border-line text-clay-600">
+        <span>
+          <span class="font-semibold">Aktif</span>
+          <span class="block text-xs text-ink-soft">Tampil di situs publik. Nonaktif berarti disembunyikan sepenuhnya.</span>
+        </span>
+      </label>
+
+      <label class="flex items-start gap-3 text-sm">
+        <input type="checkbox" name="is_coming_soon" value="1" {{if .Data.Form.IsComingSoon}}checked{{end}}
+               class="mt-0.5 h-4 w-4 rounded border-line text-clay-600">
+        <span>
+          <span class="font-semibold">Segera hadir</span>
+          <span class="block text-xs text-ink-soft">Tetap tampil dengan label, tapi belum bisa dipesan.</span>
+        </span>
+      </label>
+    </div>
+  </div>
+
+  <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+    <a href="/admin/layanan" class="{{template "btn_ghost"}}">Batal</a>
+    <button type="submit" class="{{template "btn_primary"}}">
+      {{icon "check" "h-4 w-4"}}
+      {{if .Data.IsNew}}Tambah layanan{{else}}Simpan perubahan{{end}}
+    </button>
+  </div>
+</form>
+
+{{- end -}}

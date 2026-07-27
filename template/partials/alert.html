@@ -1,0 +1,19 @@
+{{/*
+  Flash message. Takes a view.Flash: {Level, Message}.
+  Level is one of success, error, warning, info.
+*/}}
+{{- define "alert" -}}
+{{- $class := "bg-info-soft text-info" -}}
+{{- $icon := "info" -}}
+{{- if eq .Level "success" -}}
+  {{- $class = "bg-success-soft text-success" -}}{{- $icon = "check-circle" -}}
+{{- else if eq .Level "error" -}}
+  {{- $class = "bg-danger-soft text-danger" -}}{{- $icon = "alert-circle" -}}
+{{- else if eq .Level "warning" -}}
+  {{- $class = "bg-warning-soft text-warning" -}}{{- $icon = "alert-triangle" -}}
+{{- end -}}
+<div class="mb-4 flex items-start gap-3 rounded-card px-4 py-3 text-sm font-medium {{$class}}" role="status">
+  {{icon $icon "mt-0.5 h-4.5 w-4.5 shrink-0"}}
+  <p>{{.Message}}</p>
+</div>
+{{- end -}}

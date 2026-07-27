@@ -1,0 +1,149 @@
+{{/*
+  Admin panel chrome: forest sidebar, light content area.
+
+  The sidebar is the same structural green as the public header, so the two
+  subsystems read as one product. Pages under pages/admin/ define "content".
+*/}}
+{{- define "base" -}}
+<!doctype html>
+<html lang="id" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>{{if .Page.Title}}{{.Page.Title}} — {{end}}Admin {{.Site.Name}}</title>
+  {{/* The admin panel is never indexed, whatever the page sets. */}}
+  <meta name="robots" content="noindex, nofollow">
+
+  <meta name="theme-color" content="#0e2419">
+  <link rel="icon" href="{{asset "/static/img/favicon.svg"}}" type="image/svg+xml">
+
+  <link rel="preload" href="{{asset "/static/fonts/plus-jakarta-sans-var.woff2"}}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{asset "/static/css/app.css"}}">
+  <script src="{{asset "/static/js/turbo.js"}}" defer></script>
+  {{/* The app's own JS, after Turbo so its turbo:load listener is registered
+       before the first one fires. Everything in it is enhancement: with the file
+       blocked, the dialogs still submit and the payment panel still renders. */}}
+  <script src="{{asset "/static/js/app.js"}}" defer></script>
+</head>
+
+<body class="min-h-full bg-paper-2 text-ink">
+
+  <a href="#content" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-field focus:bg-clay-600 focus:px-4 focus:py-2 focus:text-paper">
+    Lompat ke konten
+  </a>
+
+  {{/* min-h-screen, not min-h-full: a percentage height resolves against body,
+       which is only min-height-constrained, so the sidebar would stop at the
+       height of the content instead of reaching the bottom of the viewport. */}}
+  <div class="flex min-h-screen">
+
+    {{/* Checkbox-driven sidebar, for the same reason as the public mobile menu:
+         Turbo Drive replaces the body on navigation, so JS-held state would reset
+         anyway.
+
+         The checkbox must be a SIBLING of everything it drives: Tailwind's peer-*
+         variants compile to the subsequent-sibling selector (~), so a checkbox
+         outside this div could not reach the sidebar nested inside it. sr-only
+         takes it out of flow, so it does not disturb the flex row. */}}
+    <input type="checkbox" id="sidebar-toggle" class="peer sr-only">
+
+    {{template "admin_sidebar" .}}
+
+    {{/* Scrim: tapping outside the open sidebar closes it. */}}
+    <label for="sidebar-toggle" class="fixed inset-0 z-20 hidden bg-forest-950/50 peer-checked:block lg:!hidden">
+      <span class="sr-only">Tutup menu</span>
+    </label>
+
+    <div class="flex min-w-0 flex-1 flex-col">
+      {{template "admin_topbar" .}}
+
+      {{if .Flash}}
+        <div class="px-4 pt-6 sm:px-6 lg:px-8">
+          {{range .Flash}}{{template "alert" .}}{{end}}
+        </div>
+      {{end}}
+
+      <main id="content" class="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        {{template "content" .}}
+      </main>
+    </div>
+  </div>
+</body>
+</html>
+{{- end -}}
+
+
+{{- define "admin_sidebar" -}}
+<aside class="fixed inset-y-0 left-0 z-30 flex w-64 -translate-x-full flex-col bg-forest-950 text-paper transition-transform peer-checked:translate-x-0 lg:static lg:translate-x-0">
+
+  <a href="/admin" class="flex h-16 shrink-0 items-center gap-2 px-5 font-display text-base font-bold">
+    <span class="grid h-8 w-8 place-items-center rounded-field bg-clay-600 font-black">T</span>
+    <span>TPJ <span class="font-medium text-paper/60">Admin</span></span>
+  </a>
+
+  <nav class="flex-1 overflow-y-auto px-3 py-4" aria-label="Navigasi admin">
+    {{$path := .Page.Path}}
+    <ul class="space-y-1">
+      {{range $item := adminNav}}
+        <li>
+          <a href="{{$item.Href}}"
+             class="flex items-center gap-3 rounded-field px-3 py-2.5 text-sm font-medium transition
+                    {{if activeNav $path $item.Href}}bg-clay-600 text-paper{{else}}text-paper/70 hover:bg-forest-900 hover:text-paper{{end}}"
+             {{if activeNav $path $item.Href}}aria-current="page"{{end}}>
+            {{icon $item.Icon "h-4.5 w-4.5 shrink-0"}}
+            {{$item.Label}}
+          </a>
+        </li>
+      {{end}}
+    </ul>
+  </nav>
+
+  <div class="shrink-0 border-t border-forest-900 p-3">
+    <a href="/" class="flex items-center gap-3 rounded-field px-3 py-2.5 text-sm font-medium text-paper/70 transition hover:bg-forest-900 hover:text-paper">
+      {{icon "external-link" "h-4.5 w-4.5 shrink-0"}}
+      Lihat situs publik
+    </a>
+  </div>
+</aside>
+{{- end -}}
+
+
+{{- define "admin_topbar" -}}
+<header class="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-3 border-b border-line bg-paper px-4 sm:px-6 lg:px-8">
+
+  <label for="sidebar-toggle" class="grid h-10 w-10 cursor-pointer place-items-center rounded-field text-ink-soft transition hover:bg-paper-2 lg:hidden">
+    <span class="sr-only">Buka menu</span>
+    {{icon "menu" "h-5 w-5"}}
+  </label>
+
+  <h1 class="min-w-0 truncate font-display text-lg font-bold">{{.Page.Title}}</h1>
+
+  <div class="ml-auto flex items-center gap-2">
+    {{if .User}}
+      <div class="flex items-center gap-2.5 rounded-pill bg-paper-2 py-1.5 pl-1.5 pr-3">
+        <span class="grid h-7 w-7 place-items-center rounded-pill bg-forest-700 text-xs font-bold text-paper">{{.User.Initial}}</span>
+        <span class="hidden max-w-32 truncate text-sm font-medium sm:inline">{{.User.Name}}</span>
+      </div>
+      {{/*
+        A form, not a link: a GET that ends a session is triggerable by any
+        cross-site <img src="/logout">, and Turbo 8's hover prefetch would end it
+        on mouseover. Both problems disappear with the method.
+      */}}
+      <form method="post" action="/logout">
+        {{csrfField .CSRF}}
+        <button type="submit" class="grid h-10 w-10 place-items-center rounded-field text-ink-soft transition hover:bg-paper-2 hover:text-danger" title="Keluar">
+          <span class="sr-only">Keluar</span>
+          {{icon "log-out" "h-4.5 w-4.5"}}
+        </button>
+      </form>
+    {{else}}
+      {{/* RequireAdmin wraps this subtree, so this branch is reached only by the
+           error pages, which render before the middleware has a user. */}}
+      <a href="{{loginURL .Page.Path}}" class="rounded-field bg-clay-600 px-4 py-2 text-sm font-semibold text-paper transition hover:bg-clay-500">
+        Masuk
+      </a>
+    {{end}}
+  </div>
+</header>
+{{- end -}}

@@ -1,0 +1,18 @@
+{{/*
+  Status badge. Takes a view.Badge: {Label, Class}, which statusBadge produces
+  from a bookings.status value:
+
+    {{template "badge" (statusBadge .Booking.Status)}}
+*/}}
+{{- define "badge" -}}
+<span class="inline-flex items-center rounded-pill px-2.5 py-1 text-xs font-semibold whitespace-nowrap {{.Class}}">{{.Label}}</span>
+{{- end -}}
+
+
+{{/*
+  Neutral pill for non-status metadata (duration, capacity, counts).
+  Takes a string.
+*/}}
+{{- define "pill" -}}
+<span class="inline-flex items-center rounded-pill bg-paper-2 px-2.5 py-1 text-xs font-semibold text-ink-soft whitespace-nowrap">{{.}}</span>
+{{- end -}}

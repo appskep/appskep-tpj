@@ -1,0 +1,69 @@
+{{/*
+  Layanan card. Takes an sqlc.Service.
+
+  A coming-soon service is shown but not bookable (PLAN.md Phase 4): the card
+  keeps its badge and its detail link, and the booking CTA is replaced rather than
+  merely dimmed, so there is nothing to click that will not work.
+
+  The image and the title link to /layanan/{slug} regardless of state. Phase 6
+  added that: before it, a bookable card linked only to /booking, which left the
+  detail page reachable for coming-soon services alone.
+*/}}
+{{- define "service_card" -}}
+<article class="group flex flex-col overflow-hidden rounded-card border border-line bg-paper shadow-card transition hover:shadow-lifted">
+
+  <a href="/layanan/{{.Slug}}" tabindex="-1" aria-hidden="true" class="relative block aspect-[4/3] overflow-hidden bg-paper-2">
+    {{if .ImagePath.Valid}}
+      <img src="/static/{{nullstr .ImagePath}}" alt="{{.Name}}"
+           width="640" height="480" loading="lazy" decoding="async"
+           class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]">
+    {{else}}
+      {{/* Placeholder rather than a broken image: image_path is optional and the
+           admin fills it in from /admin/layanan. */}}
+      <div class="grid h-full w-full place-items-center text-ink-faint">
+        {{icon "image" "h-8 w-8"}}
+      </div>
+    {{end}}
+
+    {{if .IsComingSoon}}
+      <span class="absolute left-3 top-3 rounded-pill bg-forest-950/85 px-2.5 py-1 text-xs font-semibold text-paper backdrop-blur">
+        Segera hadir
+      </span>
+    {{end}}
+  </a>
+
+  <div class="flex flex-1 flex-col p-5">
+    {{/* The image link above is aria-hidden and out of the tab order, so this is
+         the single link to the detail page a keyboard or screen reader sees. */}}
+    <h3 class="font-display text-lg font-bold">
+      <a href="/layanan/{{.Slug}}" class="transition hover:text-clay-600">{{.Name}}</a>
+    </h3>
+
+    {{if .Description.Valid}}
+      <p class="mt-2 text-sm leading-relaxed text-ink-soft">{{truncate (nullstr .Description) 130}}</p>
+    {{end}}
+
+    <div class="mt-4 mb-5 flex items-center gap-2">
+      {{template "pill" (duration .DurationMinutes)}}
+    </div>
+
+    {{/* mt-auto pins the price row to the foot of the card, so a row of cards
+         with descriptions of different lengths still lines its prices up. The
+         mb-5 above guarantees the gap when there is no slack left to absorb. */}}
+    <div class="mt-auto flex items-end justify-between gap-3 border-t border-line pt-4">
+      <p>
+        <span class="font-display text-xl font-bold">{{rupiah .Price}}</span>
+        <span class="block text-xs text-ink-soft">per sesi</span>
+      </p>
+
+      {{if .IsComingSoon}}
+        <a href="/layanan/{{.Slug}}" class="{{template "btn_ghost"}}">Lihat detail</a>
+      {{else}}
+        <a href="/booking?layanan={{.Slug}}" class="{{template "btn_primary"}}">
+          Booking {{icon "arrow-right" "h-4 w-4"}}
+        </a>
+      {{end}}
+    </div>
+  </div>
+</article>
+{{- end -}}

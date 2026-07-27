@@ -1,0 +1,32 @@
+{{define "booking_reminder_subject"}}Pengingat: jadwal Anda besok, {{timeRange .Booking.StartTime .Booking.EndTime}}{{end}}
+
+{{define "booking_reminder_html"}}
+{{template "email_open" .}}
+<h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:32px;font-weight:700;color:#1b2a22;">Sampai jumpa besok</h1>
+<p style="margin:0 0 20px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#56645b;">
+  Halo {{.Booking.Customer}}, ini pengingat untuk jadwal terapi Anda besok.
+</p>
+
+{{template "email_booking_table" .}}
+
+<p style="margin:20px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#1b2a22;">
+  Datanglah beberapa menit lebih awal dan sebutkan kode booking saat tiba. Jika Anda berhalangan, beri tahu kami hari ini{{if .Site.WhatsApp}} lewat WhatsApp{{end}} supaya jadwalnya bisa dipakai orang lain.
+</p>
+
+{{template "email_button" .}}
+{{template "email_close" .}}
+{{end}}
+
+{{define "booking_reminder_text"}}Halo {{.Booking.Customer}},
+
+Ini pengingat untuk jadwal terapi Anda besok.
+
+{{template "email_booking_text" .}}
+
+Datanglah beberapa menit lebih awal dan sebutkan kode booking saat tiba. Jika
+Anda berhalangan, beri tahu kami hari ini{{if .Site.WhatsApp}} lewat WhatsApp{{end}} supaya jadwalnya
+bisa dipakai orang lain.
+
+Detail booking:
+{{.Booking.URL}}
+{{template "email_footer_text" .}}{{end}}

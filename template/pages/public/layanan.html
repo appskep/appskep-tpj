@@ -1,0 +1,53 @@
+{{/*
+  /layanan — the full catalogue.
+
+  Deliberately the same grid and the same service_card as the landing page's
+  layanan section: this page is that section without the rest of the pitch, and
+  two divergent card layouts for the same object would only be a thing to keep in
+  sync.
+*/}}
+{{- define "content" -}}
+
+<section class="border-b border-line bg-paper-2">
+  <div class="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:py-20">
+    <nav aria-label="Remah roti" class="text-sm text-ink-soft">
+      <a href="/" class="transition hover:text-ink">Beranda</a>
+      <span class="px-1.5" aria-hidden="true">/</span>
+      <span class="font-medium text-ink">Layanan</span>
+    </nav>
+
+    <h1 class="mt-4 max-w-2xl font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
+      Tiga cara memperbaiki badan yang <span class="text-clay-600">terlanjur pegal</span>
+    </h1>
+    <p class="mt-4 max-w-xl text-lg text-ink-soft">
+      Ditangani terapis yang sama, dengan durasi dan harga yang tertulis di tiap layanan.
+      Pilih yang paling dekat dengan keluhanmu — kalau ragu, tanya dulu lewat WhatsApp.
+    </p>
+  </div>
+</section>
+
+<section class="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:py-20">
+  {{if .Data.Services}}
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {{range .Data.Services}}{{template "service_card" .}}{{end}}
+    </div>
+  {{else}}
+    {{template "empty" .Data.Empty}}
+  {{end}}
+
+  {{if .Site.WhatsApp}}
+    <div class="mt-14 flex flex-col items-start gap-4 rounded-card border border-line bg-paper-2 p-6 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p class="font-display text-lg font-bold">Masih bingung pilih yang mana?</p>
+        <p class="mt-1 text-sm text-ink-soft">Ceritakan keluhannya, kami bantu pilihkan.</p>
+      </div>
+      <a href="{{waLink .Site.WhatsApp "Halo, saya bingung pilih layanan yang mana."}}"
+         rel="noopener noreferrer" target="_blank"
+         class="{{template "btn_secondary"}}">
+        {{icon "brand-whatsapp" "h-4 w-4"}} Tanya lewat WhatsApp
+      </a>
+    </div>
+  {{end}}
+</section>
+
+{{- end -}}

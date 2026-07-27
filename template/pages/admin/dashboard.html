@@ -1,0 +1,163 @@
+{{/*
+  Admin dashboard.
+
+  A shift starts with a glance, so the page answers three questions in order:
+  who is coming today, what needs acting on, and how the month is going. Every
+  number links to the booking list filtered to exactly the rows it counted — a
+  figure that leads somewhere showing a different figure would be worse than one
+  that leads nowhere.
+
+  Sections whose read failed are simply absent: service.Dashboard logs and drops
+  a card rather than failing the page.
+*/}}
+{{- define "content" -}}
+
+{{/* ------------------------------------------------------------------ ANGKA */}}
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+  <a href="{{.Data.TodayHref}}" class="group rounded-card border border-line bg-paper p-5 transition hover:border-clay-200 hover:shadow-card">
+    <span class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+      {{icon "calendar" "h-4 w-4"}} Hari ini
+    </span>
+    <span class="mt-2 block font-display text-3xl font-extrabold">{{.Data.DaySheetTotal}}</span>
+    <span class="block text-sm text-ink-soft">{{dateID .Data.Today}}</span>
+  </a>
+
+  <a href="{{.Data.PendingHref}}" class="group rounded-card border border-line bg-paper p-5 transition hover:border-clay-200 hover:shadow-card">
+    <span class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+      {{icon "clock" "h-4 w-4"}} Menunggu bayar
+    </span>
+    <span class="mt-2 block font-display text-3xl font-extrabold {{if .Data.Pending}}text-warning{{end}}">{{.Data.Pending}}</span>
+    <span class="block text-sm text-ink-soft">7 hari ke depan</span>
+  </a>
+
+  <div class="rounded-card border border-line bg-paper p-5 sm:col-span-2">
+    <span class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+      {{icon "wallet" "h-4 w-4"}} Pemasukan {{monthID .Data.MonthLabel}}
+    </span>
+    <span class="mt-2 block font-display text-3xl font-extrabold">{{rupiah .Data.MonthRevenue}}</span>
+    <span class="block text-sm text-ink-soft">
+      dari {{.Data.MonthPaid}} pembayaran yang sudah masuk bulan ini
+    </span>
+  </div>
+</div>
+
+{{/* ------------------------------------------------------------- DAY SHEET */}}
+<section class="mt-6 rounded-card border border-line bg-paper shadow-card">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
+    <h2 class="font-display text-lg font-bold">Jadwal hari ini</h2>
+    <a href="{{.Data.TodayHref}}" class="text-sm font-medium text-clay-600 hover:underline">Lihat di daftar booking</a>
+  </div>
+
+  {{if .Data.DaySheet}}
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[44rem] text-sm">
+        <thead class="border-b border-line bg-paper-2 text-left text-xs uppercase tracking-wide text-ink-soft">
+          <tr>
+            <th scope="col" class="px-5 py-3 font-semibold">Jam</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Pelanggan</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Layanan</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Kode</th>
+            <th scope="col" class="px-5 py-3 font-semibold">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-line">
+          {{range .Data.DaySheet}}
+            <tr class="transition hover:bg-paper-2">
+              <td class="whitespace-nowrap px-5 py-3 font-medium">
+                {{timeRange .Booking.SlotStartTime .Booking.SlotEndTime}}
+              </td>
+              <td class="px-5 py-3">
+                <span class="block font-medium">{{.Booking.CustomerName}}</span>
+                <span class="block text-xs text-ink-faint">{{.Booking.CustomerPhone}}</span>
+              </td>
+              <td class="px-5 py-3 text-ink-soft">{{.Booking.ServiceName}}</td>
+              <td class="whitespace-nowrap px-5 py-3">
+                <a href="{{.Href}}" class="font-medium text-clay-600 hover:underline">{{.Booking.BookingCode}}</a>
+              </td>
+              <td class="px-5 py-3">{{template "badge" (statusBadge .Booking.Status)}}</td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  {{else}}
+    <p class="px-5 py-8 text-center text-sm text-ink-soft">Tidak ada booking untuk hari ini.</p>
+  {{end}}
+</section>
+
+{{/* --------------------------------------------------------------- RINGKAS */}}
+<div class="mt-6 grid gap-5 lg:grid-cols-2">
+
+  <section class="rounded-card border border-line bg-paper p-5 shadow-card">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="font-display text-lg font-bold">7 hari ke depan</h2>
+      <a href="{{.Data.UpcomingHref}}" class="text-sm font-medium text-clay-600 hover:underline">Lihat semua</a>
+    </div>
+    {{template "status_tiles" .Data.UpcomingTiles}}
+  </section>
+
+  <section class="rounded-card border border-line bg-paper p-5 shadow-card">
+    <h2 class="font-display text-lg font-bold">Bulan ini ({{monthID .Data.MonthLabel}})</h2>
+    {{template "status_tiles" .Data.MonthTiles}}
+  </section>
+</div>
+
+{{/* ------------------------------------------------------ PEMBAYARAN TERBARU */}}
+<section class="mt-6 rounded-card border border-line bg-paper shadow-card">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
+    <h2 class="font-display text-lg font-bold">Pembayaran terbaru</h2>
+    <a href="/admin/pembayaran?status=paid" class="text-sm font-medium text-clay-600 hover:underline">Semua pembayaran</a>
+  </div>
+
+  {{if .Data.RecentPayments}}
+    <ul class="divide-y divide-line">
+      {{range .Data.RecentPayments}}
+        <li class="flex flex-wrap items-center gap-3 px-5 py-3.5">
+          <span class="min-w-0 flex-1">
+            <span class="block font-medium">{{.Payment.UserName}}</span>
+            <span class="block text-xs text-ink-faint">
+              {{.Payment.ServiceName}} ·
+              <a href="{{.Href}}" class="text-clay-600 hover:underline">{{.Payment.BookingCode}}</a>
+            </span>
+          </span>
+          <span class="text-right">
+            <span class="block font-display font-bold">{{rupiah .Payment.GrossAmount}}</span>
+            <span class="block text-xs text-ink-faint">
+              {{if .Payment.PaidAt.Valid}}{{dateTimeID .Payment.PaidAt.Time}}{{end}}
+            </span>
+          </span>
+        </li>
+      {{end}}
+    </ul>
+  {{else}}
+    <p class="px-5 py-8 text-center text-sm text-ink-soft">Belum ada pembayaran yang masuk.</p>
+  {{end}}
+</section>
+
+{{- end -}}
+
+
+{{/*
+  A status breakdown. Takes []statusTile — label, colour, count and the list
+  link that shows exactly those rows.
+
+  Zero counts are already dropped by the handler: six zeroes are noise around
+  the one number that is not zero.
+*/}}
+{{- define "status_tiles" -}}
+{{if .}}
+  <ul class="mt-4 space-y-2">
+    {{range .}}
+      <li>
+        <a href="{{.Href}}" class="flex items-center gap-3 rounded-field px-2 py-1.5 transition hover:bg-paper-2">
+          <span class="inline-flex items-center rounded-pill px-2.5 py-1 text-xs font-semibold whitespace-nowrap {{.Class}}">{{.Label}}</span>
+          <span class="ml-auto font-display text-lg font-bold">{{.Total}}</span>
+        </a>
+      </li>
+    {{end}}
+  </ul>
+{{else}}
+  <p class="mt-4 text-sm text-ink-soft">Belum ada booking pada rentang ini.</p>
+{{end}}
+{{- end -}}

@@ -1,0 +1,307 @@
+{{/*
+  /booking/{code}/pembayaran — the booking's receipt and its payment step.
+
+  Two templates, one file:
+
+    content        the whole page
+    payment_status the panel that changes, re-rendered on its own by the poller
+
+  The fragment is defined here rather than in template/partials/ because the page
+  and the frame must render the SAME markup — the Phase 4 rule. A partial would
+  be equally shared, but keeping it beside its only consumer is what makes a
+  future edit to one obviously an edit to both.
+
+  There is no JavaScript countdown. The deadline is stated as a time, which
+  survives a Turbo Drive body swap and works with JS off — and the booking's real
+  fate is decided by the expiry ticker on the server, not by a clock in the page.
+  The one script here reloads the frame, and only while there is an answer still
+  coming; without it the page is still correct, it just needs a manual refresh.
+*/}}
+{{- define "content" -}}
+{{$b := .Data.Booking}}
+
+<div class="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:py-12">
+
+  <nav aria-label="Remah roti" class="text-sm text-ink-soft">
+    <a href="/" class="transition hover:text-ink">Beranda</a>
+    <span class="px-1.5" aria-hidden="true">/</span>
+    <a href="/riwayat" class="transition hover:text-ink">Riwayat</a>
+    <span class="px-1.5" aria-hidden="true">/</span>
+    <span class="font-medium text-ink">{{$b.BookingCode}}</span>
+  </nav>
+
+  <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+    <h1 class="font-display text-3xl font-extrabold tracking-tight">Pembayaran</h1>
+    {{template "badge" (statusBadge $b.Status)}}
+  </div>
+
+  <p class="mt-2 text-ink-soft">
+    Kode booking <span class="font-semibold text-ink">{{$b.BookingCode}}</span>
+  </p>
+
+  {{/* ------------------------------------------------------------ RINGKASAN */}}
+  <div class="mt-8 rounded-card border border-line bg-paper p-6">
+    <dl class="divide-y divide-line text-sm">
+      <div class="flex justify-between gap-4 pb-3">
+        <dt class="text-ink-soft">Layanan</dt>
+        <dd class="text-right font-semibold">
+          <a href="/layanan/{{$b.ServiceSlug}}" class="transition hover:text-clay-700">{{$b.ServiceName}}</a>
+        </dd>
+      </div>
+      <div class="flex justify-between gap-4 py-3">
+        <dt class="text-ink-soft">Jadwal</dt>
+        <dd class="text-right font-semibold">
+          {{dateID $b.SlotDate}}<br>
+          <span class="font-normal text-ink-soft">{{timeRange $b.SlotStartTime $b.SlotEndTime}}</span>
+        </dd>
+      </div>
+      <div class="flex justify-between gap-4 py-3">
+        <dt class="text-ink-soft">Atas nama</dt>
+        <dd class="text-right font-semibold">{{$b.CustomerName}}</dd>
+      </div>
+      <div class="flex justify-between gap-4 py-3">
+        <dt class="text-ink-soft">Telepon</dt>
+        <dd class="text-right">{{$b.CustomerPhone}}</dd>
+      </div>
+      {{if $b.Notes.Valid}}
+        <div class="flex justify-between gap-4 py-3">
+          <dt class="shrink-0 text-ink-soft">Catatan</dt>
+          <dd class="text-right">{{nullstr $b.Notes}}</dd>
+        </div>
+      {{end}}
+      <div class="flex items-baseline justify-between gap-4 pt-4">
+        <dt class="font-semibold">Total</dt>
+        <dd class="font-display text-3xl font-bold text-clay-600">{{rupiah $b.PriceAmount}}</dd>
+      </div>
+    </dl>
+  </div>
+
+  {{/* ------------------------------------------------------------ PEMBAYARAN
+
+    Everything below this line can change without the page being reloaded, so it
+    all lives inside the frame — which the fragment template emits itself, along
+    with its contents. The page also renders it inline, so the panel is correct
+    before any JavaScript runs and stays correct with JavaScript off.
+  */}}
+  {{template "payment_status" .}}
+
+  {{/* The poller lives in static/js/app.js: an inline <script> is refused by the
+       CSP, and a poller shipped inside the frame would be replaced along with
+       the content it reloads. It keys off the data-poll flag the fragment
+       above renders, so the server still decides when to stop. */}}
+
+  <div class="mt-8 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+    <a href="/riwayat" class="{{template "btn_ghost"}}">
+      {{icon "arrow-left" "h-4 w-4"}} Lihat riwayat booking
+    </a>
+    {{/* Konfirmasi is the canonical page for this booking; this page is only the
+         payment step. Once there is nothing left to pay, the GET above redirects
+         there on its own. */}}
+    <a href="/booking/{{$b.BookingCode}}/konfirmasi" class="{{template "btn_ghost"}}">
+      Detail booking {{icon "arrow-right" "h-4 w-4"}}
+    </a>
+  </div>
+</div>
+
+{{- end -}}
+
+
+{{/*
+  The payment panel: deadline, the pay button, and whatever Midtrans has told us
+  so far. Rendered inside the page and, unchanged, as the body of the frame the
+  poller reloads.
+
+  It takes the whole view envelope because it needs .Site for the WhatsApp
+  fallback as well as .Data — the same reason booking_slots does.
+*/}}
+{{- define "payment_status" -}}
+{{$b := .Data.Booking}}
+{{$p := .Data.Payment}}
+
+{{/*
+  This template emits the <turbo-frame> ITSELF, not just its contents, and that
+  is load-bearing. Turbo answers a frame request by looking in the response for
+  an element with the SAME id; a bare fragment has none, so Turbo logs "Response
+  has no matching <turbo-frame> element" and empties the frame. The symptom in a
+  browser is a payment panel that vanishes a moment after the page settles —
+  and, because the emptied frame no longer carries the poll flag, a poller that
+  gives up on its first tick. Phase 2's RenderFragment doc comment says the
+  frame's markup "lives in a partial"; this is what that has to mean.
+
+  The src, though, is only ever set by the PAGE — never by the fragment. Turbo
+  throws "Matching <turbo-frame> element has a source URL which references
+  itself" when the frame it finds in a response carries a src equal to the URL
+  that response came from, and the catch path leaves the frame EMPTY. The panel
+  therefore vanished a second after every page load, and the poller — which
+  reads its flag out of the frame — stopped on its first tick. Two requests in
+  eighteen seconds instead of four, and nothing at all in the server log to say
+  why. Only a browser shows this one.
+
+  data-poll is the handshake with the poller in the page: the server says
+  whether an answer is still coming, and the loop stops the moment it says no.
+  It sits on a wrapper INSIDE the frame because Turbo copies the response
+  frame's children into the existing element — attributes on the frame itself
+  are not carried over, so a flag there would never change.
+*/}}
+<turbo-frame id="payment_status"{{with .Data.FrameSrc}} src="{{.}}"{{end}} class="block">
+<div data-poll="{{if .Data.Poll}}true{{else}}false{{end}}">
+
+{{if .Data.Notice}}
+  <div role="alert" class="mt-5 flex items-start gap-3 rounded-card border border-warning/30 bg-warning-soft p-4">
+    <span class="grid h-9 w-9 shrink-0 place-items-center rounded-pill bg-paper text-warning">
+      {{icon "alert-circle" "h-4 w-4"}}
+    </span>
+    <p class="min-w-0 text-sm font-medium">{{.Data.Notice}}</p>
+  </div>
+{{end}}
+
+{{if .Data.Paid}}
+
+  {{/* ------------------------------------------------------------ LUNAS */}}
+  <div role="status" class="mt-5 rounded-card border border-success/30 bg-success-soft p-6">
+    <div class="flex items-start gap-3">
+      <span class="grid h-9 w-9 shrink-0 place-items-center rounded-pill bg-paper text-success">
+        {{icon "check-circle" "h-4 w-4"}}
+      </span>
+      <div class="min-w-0">
+        <p class="font-display text-lg font-bold">Pembayaran diterima</p>
+        <p class="mt-1 text-sm text-ink-soft">
+          Terima kasih. Slot Anda pada {{dateID $b.SlotDate}},
+          {{timeRange $b.SlotStartTime $b.SlotEndTime}} sudah terkunci.
+          Datang 10 menit lebih awal dan sebutkan kode
+          <span class="font-semibold text-ink">{{$b.BookingCode}}</span>.
+        </p>
+      </div>
+    </div>
+
+    {{if $p}}
+      <dl class="mt-5 grid gap-2 border-t border-success/20 pt-4 text-sm sm:grid-cols-2">
+        {{if $p.PaymentType.Valid}}
+          <div class="flex justify-between gap-3 sm:block">
+            <dt class="text-ink-soft">Metode</dt>
+            <dd class="font-semibold">{{nullstr $p.PaymentType}}</dd>
+          </div>
+        {{end}}
+        {{if $p.PaidAt.Valid}}
+          <div class="flex justify-between gap-3 sm:block">
+            <dt class="text-ink-soft">Dibayar</dt>
+            <dd class="font-semibold">{{dateTimeID $p.PaidAt.Time}}</dd>
+          </div>
+        {{end}}
+      </dl>
+    {{end}}
+  </div>
+
+{{else if .Data.Expired}}
+
+  {{/* ---------------------------------------------------------- KEDALUWARSA */}}
+  <div role="status" class="mt-5 flex items-start gap-3 rounded-card border border-danger/30 bg-danger-soft p-4">
+    <span class="grid h-9 w-9 shrink-0 place-items-center rounded-pill bg-paper text-danger">
+      {{icon "alert-circle" "h-4 w-4"}}
+    </span>
+    <div class="min-w-0">
+      <p class="text-sm font-semibold">Batas waktu pembayaran sudah lewat.</p>
+      <p class="mt-1 text-sm text-ink-soft">
+        Slotnya sudah dilepas supaya bisa dipakai orang lain. Silakan
+        <a href="/booking?layanan={{$b.ServiceSlug}}" class="font-semibold text-clay-700 underline">booking ulang</a>.
+      </p>
+    </div>
+  </div>
+
+{{else if .Data.Pending}}
+
+  {{/* -------------------------------------------------------- BATAS WAKTU */}}
+  <div role="status" class="mt-5 flex items-start gap-3 rounded-card border border-warning/30 bg-warning-soft p-4">
+    <span class="grid h-9 w-9 shrink-0 place-items-center rounded-pill bg-paper text-warning">
+      {{icon "clock" "h-4 w-4"}}
+    </span>
+    <div class="min-w-0">
+      <p class="text-sm font-semibold">
+        Bayar sebelum {{dateTimeID $b.ExpiresAt.Time}}
+      </p>
+      <p class="mt-1 text-sm text-ink-soft">
+        Lewat dari itu, slot ini dilepas otomatis dan bisa diambil orang lain.
+      </p>
+    </div>
+  </div>
+
+  {{/* ------------------------------------------------------- BAYAR ONLINE */}}
+  <div class="mt-5 rounded-card border border-line bg-paper-2 p-6">
+    <h2 class="flex items-center gap-2 font-display text-lg font-bold">
+      {{icon "credit-card" "h-5 w-5 text-clay-600"}} Pembayaran online
+    </h2>
+
+    {{if and $p $p.VaNumber.Valid}}
+      {{/* Midtrans has issued an account to transfer to. Showing it here saves
+           the customer a round trip back into Snap just to read the number. */}}
+      <div class="mt-4 rounded-field border border-line bg-paper p-4">
+        <p class="text-xs uppercase tracking-wide text-ink-soft">
+          {{if $p.Bank.Valid}}Virtual account {{nullstr $p.Bank}}{{else}}Virtual account{{end}}
+        </p>
+        <p class="mt-1 font-display text-2xl font-bold tracking-wide">{{nullstr $p.VaNumber}}</p>
+        <p class="mt-2 text-sm text-ink-soft">
+          Transfer tepat {{rupiah $b.PriceAmount}} sebelum batas waktu di atas.
+        </p>
+      </div>
+    {{else}}
+      <p class="mt-2 text-sm leading-relaxed text-ink-soft">
+        Bayar lewat transfer bank, virtual account, QRIS, atau e-wallet. Anda akan diarahkan
+        ke halaman pembayaran Midtrans, lalu kembali ke sini.
+      </p>
+    {{end}}
+
+    <div class="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
+      {{/* Answers with a redirect to Midtrans, so Turbo is happy and this form
+           needs no data-turbo="false" — unlike a POST that renders a 200. */}}
+      <form method="post" action="/booking/{{$b.BookingCode}}/pembayaran" data-turbo-frame="_top">
+        {{csrfField .CSRF}}
+        <button type="submit" class="{{template "btn_primary"}} w-full sm:w-auto">
+          {{icon "wallet" "h-4 w-4"}}
+          {{if and $p $p.SnapRedirectUrl.Valid}}Lanjutkan pembayaran{{else}}Bayar sekarang{{end}}
+        </button>
+      </form>
+
+      {{if and $p $p.SnapRedirectUrl.Valid}}
+        {{/* The manual re-sync. Useful whenever a notification is slow, and the
+             only way to finish a payment where Midtrans cannot reach us. */}}
+        <form method="post" action="/booking/{{$b.BookingCode}}/periksa" data-turbo-frame="_top">
+          {{csrfField .CSRF}}
+          <button type="submit" class="{{template "btn_ghost"}} w-full sm:w-auto">
+            {{icon "refresh-cw" "h-4 w-4"}} Saya sudah bayar
+          </button>
+        </form>
+      {{end}}
+    </div>
+
+    {{if .Site.WhatsApp}}
+      <p class="mt-4 text-sm text-ink-soft">
+        Ada kendala?
+        <a href="{{waLink .Site.WhatsApp (printf "Halo, saya butuh bantuan pembayaran booking %s (%s)." $b.BookingCode $b.ServiceName)}}"
+           rel="noopener noreferrer" target="_blank"
+           class="font-semibold text-clay-700 underline">Hubungi kami lewat WhatsApp</a>.
+      </p>
+    {{end}}
+  </div>
+
+{{else}}
+
+  {{/* --------------------------------------------------- DIBATALKAN / LAIN */}}
+  <div role="status" class="mt-5 flex items-start gap-3 rounded-card border border-line bg-paper-2 p-4">
+    <span class="grid h-9 w-9 shrink-0 place-items-center rounded-pill bg-paper text-ink-soft">
+      {{icon "ban" "h-4 w-4"}}
+    </span>
+    <div class="min-w-0">
+      <p class="text-sm font-semibold">Booking ini tidak lagi menunggu pembayaran.</p>
+      <p class="mt-1 text-sm text-ink-soft">
+        Silakan
+        <a href="/booking?layanan={{$b.ServiceSlug}}" class="font-semibold text-clay-700 underline">booking ulang</a>
+        jika masih membutuhkan jadwal.
+      </p>
+    </div>
+  </div>
+
+{{end}}
+
+</div>
+</turbo-frame>
+{{- end -}}

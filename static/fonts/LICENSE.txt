@@ -1,0 +1,9 @@
+Bricolage Grotesque — SIL Open Font License 1.1
+  Copyright (c) 2023 The Bricolage Project Authors
+  https://github.com/ateliertriay/bricolage
+
+Plus Jakarta Sans — SIL Open Font License 1.1
+  Copyright (c) 2020 Tokotype
+  https://github.com/tokotype/PlusJakartaSans
+
+Full licence text: https://openfontlicense.org

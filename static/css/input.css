@@ -1,0 +1,178 @@
+/* Tailwind entry point. Compiled to static/css/app.css by `make tailwind`.
+ *
+ * Tailwind v4 is CSS-first: there is no tailwind.config.js. Design tokens are
+ * declared in @theme below and Tailwind generates the utilities from them, so
+ * `bg-forest-900` and `text-clay-600` exist because the variables do.
+ *
+ * Design direction — warm clay + deep green.
+ * Deep green is STRUCTURAL, not an accent: the public header, the footer and the
+ * admin sidebar are dark forest surfaces. Clay appears only on actions. That
+ * inversion is deliberate — clay-as-small-accent-on-cream is the default look
+ * for every wellness site on the internet, and this brand is not neutral: TPJ is
+ * named after a joke about young people with old-person backs.
+ */
+
+@import "tailwindcss";
+
+/* Tailwind scans these for class names. The path is relative to this file. */
+@source "../../template";
+
+@theme {
+  /* --- Surfaces -------------------------------------------------------- */
+  /* Warm paper, not white and not the cream everyone reaches for. */
+  --color-paper: #faf5ef;
+  --color-paper-2: #f1e7da;
+  --color-line: #e3d4c2;
+
+  /* --- Text ------------------------------------------------------------ */
+  /* Green-black rather than neutral black, so text sits in the same family
+   * as the structural green instead of fighting it. */
+  --color-ink: #1b2a22;
+  --color-ink-soft: #56645b;
+  --color-ink-faint: #8a9690;
+
+  /* --- Forest: structure ----------------------------------------------- */
+  --color-forest-950: #0e2419;
+  --color-forest-900: #143224;
+  --color-forest-700: #1e5138;
+  --color-forest-500: #2f7d57;
+  --color-forest-100: #d7e8dc;
+
+  /* --- Clay: actions --------------------------------------------------- */
+  /* clay-600 is the primary action colour. It carries 4.7:1 against paper. */
+  --color-clay-700: #96431f;
+  --color-clay-600: #b4552f;
+  --color-clay-500: #cb6c41;
+  --color-clay-200: #f2d8c7;
+  --color-clay-50: #fcf2ea;
+
+  /* --- Semantic -------------------------------------------------------- */
+  --color-success: #2f7d57;
+  --color-success-soft: #d7e8dc;
+  --color-warning: #a6741c;
+  --color-warning-soft: #f7e9cd;
+  --color-danger: #a8352a;
+  --color-danger-soft: #f7dcd8;
+  --color-info: #2c5f76;
+  --color-info-soft: #d8e8ef;
+
+  /* --- Type ------------------------------------------------------------ */
+  /* Display: a low-contrast irregular grotesque. Chosen over the obvious
+   * high-contrast serif, which reads as editorial rather than physical.
+   * Body: Plus Jakarta Sans, commissioned for Jakarta's city identity — the
+   * typeface of this app's own timezone, and it sets Indonesian well small. */
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* --- Radius ---------------------------------------------------------- */
+  --radius-field: 0.625rem;
+  --radius-card: 1rem;
+  --radius-pill: 9999px;
+
+  /* --- Elevation ------------------------------------------------------- */
+  /* One shadow, tinted with the ink colour so it warms rather than greys. */
+  --shadow-card: 0 1px 2px rgb(27 42 34 / 0.06), 0 8px 24px -12px rgb(27 42 34 / 0.18);
+  --shadow-lifted: 0 2px 4px rgb(27 42 34 / 0.08), 0 16px 40px -16px rgb(27 42 34 / 0.24);
+}
+
+/* --- Self-hosted fonts ------------------------------------------------- */
+/* Both are variable fonts, latin subset, downloaded by scripts/build-fonts.sh.
+ * font-display: swap keeps first paint fast; the fallback metrics are close
+ * enough that the swap is not jarring. */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("/static/fonts/bricolage-grotesque-var.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/static/fonts/plus-jakarta-sans-var.woff2") format("woff2");
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* The display face is set tight: it has enough personality that default
+   * tracking makes it look loose at large sizes. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background-color: var(--color-clay-200);
+    color: var(--color-clay-700);
+  }
+
+  /* Keyboard focus must always be visible. Mouse clicks do not get a ring. */
+  :focus-visible {
+    outline: 2px solid var(--color-clay-600);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Respect the OS setting rather than animating regardless. */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* The hero's ache list arrives one row after another. This is the page's only
+   * orchestrated motion; it runs once on load and the reduced-motion block above
+   * disables it wholesale.
+   *
+   * These rows are navigation, so the animation is kept short and the delays
+   * small — the last row is fully visible within half a second. Anything longer
+   * would hide the hero's primary links behind an entrance effect.
+   *
+   * The delay is set per list item rather than with :nth-of-type on the anchor:
+   * each <a> is the only element of its type inside its own <li>, so nth-of-type
+   * on the anchor would match every one of them as number 1. */
+  .ache-point {
+    animation: ache-in 0.35s ease-out backwards;
+  }
+  li:nth-child(1) > .ache-point { animation-delay: 0.05s; }
+  li:nth-child(2) > .ache-point { animation-delay: 0.13s; }
+  li:nth-child(3) > .ache-point { animation-delay: 0.21s; }
+
+  @keyframes ache-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

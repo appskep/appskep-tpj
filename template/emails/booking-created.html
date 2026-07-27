@@ -1,0 +1,39 @@
+{{define "booking_created_subject"}}Booking {{.Booking.Code}} menunggu pembayaran{{end}}
+
+{{define "booking_created_html"}}
+{{template "email_open" .}}
+<h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:32px;font-weight:700;color:#1b2a22;">Jadwal Anda kami tahan</h1>
+<p style="margin:0 0 20px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#56645b;">
+  Halo {{.Booking.Customer}}, booking Anda sudah tercatat. Jadwal di bawah ini kami tahan untuk Anda sampai pembayaran selesai.
+</p>
+
+{{template "email_booking_table" .}}
+
+{{if not .Booking.ExpiresAt.IsZero}}
+<p style="margin:20px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#1b2a22;">
+  Selesaikan pembayaran sebelum <strong>{{dateTimeID .Booking.ExpiresAt}} WIB</strong>. Lewat dari itu, jadwal ini dilepas kembali untuk pelanggan lain.
+</p>
+{{end}}
+
+{{template "email_button" .}}
+
+<p style="margin:16px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#8a9690;">
+  Tautan tidak bisa diklik? Salin alamat ini ke browser Anda:<br>
+  <span style="color:#56645b;word-break:break-all;">{{.Booking.URL}}</span>
+</p>
+{{template "email_close" .}}
+{{end}}
+
+{{define "booking_created_text"}}Halo {{.Booking.Customer}},
+
+Booking Anda sudah tercatat. Jadwal di bawah ini kami tahan untuk Anda sampai
+pembayaran selesai.
+
+{{template "email_booking_text" .}}
+{{if not .Booking.ExpiresAt.IsZero}}
+Selesaikan pembayaran sebelum {{dateTimeID .Booking.ExpiresAt}} WIB. Lewat dari
+itu, jadwal ini dilepas kembali untuk pelanggan lain.
+{{end}}
+Bayar dan lihat detail booking:
+{{.Booking.URL}}
+{{template "email_footer_text" .}}{{end}}

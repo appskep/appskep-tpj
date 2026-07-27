@@ -1,0 +1,54 @@
+version: "2"
+sql:
+  - engine: "mysql"
+    queries: "internal/database/query"
+    schema: "internal/database/migration/0001_schema.sql"
+    gen:
+      go:
+        package: "sqlc"
+        out: "internal/database/sqlc"
+        emit_interface: true
+        emit_json_tags: true
+        emit_empty_slices: true
+        emit_prepared_queries: false
+        emit_pointers_for_null_types: false
+        overrides:
+          # go-sql-driver always returns TIME columns as a string — "database/sql
+          # does not support an equivalent to TIME" (packets.go). sqlc's default
+          # time.Time mapping therefore fails at scan time. Values look like
+          # "08:00:00"; formatting for display is the template FuncMap's job.
+          - db_type: "time"
+            go_type: "string"
+          - db_type: "time"
+            nullable: true
+            go_type: "database/sql.NullString"
+          # MariaDB accepts no NOT NULL clause on a generated column, so these
+          # parse as nullable. They are computed from NOT NULL base columns and
+          # can never be NULL, so keep them as a plain time.Time.
+          - column: "schedule_slots.starts_at"
+            go_type: "time.Time"
+          - column: "schedule_slots.ends_at"
+            go_type: "time.Time"
+          # A nullable JSON column maps to json.RawMessage by default, and
+          # database/sql cannot scan NULL into it: convertAssign special-cases
+          # *[]byte and *RawBytes but not a named slice type, so every read of a
+          # payments row whose raw_response is still NULL fails with
+          # "unsupported Scan, storing driver.Value type <nil>". Every payment
+          # row is NULL there until Midtrans answers, so this is the ordinary
+          # case, not the edge one.
+          #
+          # NullString rather than []byte, which sqlc's override validator
+          # refuses as "not a Go basic type": the column is LONGTEXT underneath
+          # (MariaDB implements JSON that way), the driver hands it over as text
+          # either way, and this matches every other nullable column in the
+          # schema. MariaDB's implicit json_valid() check still applies on
+          # write. payment_notifications.payload is NOT NULL and stays as it is.
+          - column: "payments.raw_response"
+            go_type: "database/sql.NullString"
+          # activity_logs.meta is the same column shape and the same defect: an
+          # audit entry that carries no detail writes NULL, and the Phase 10
+          # booking timeline reads those rows straight back. Overridden here
+          # rather than after the first 500. payment_notifications.payload is
+          # NOT NULL and stays as json.RawMessage.
+          - column: "activity_logs.meta"
+            go_type: "database/sql.NullString"

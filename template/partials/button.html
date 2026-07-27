@@ -1,0 +1,30 @@
+{{/*
+  Button classes as reusable strings rather than a component.
+
+  A Go template cannot take a body block as an argument, so a "button partial"
+  would have to accept the label, the icon, the href, the method and the disabled
+  state as parameters — more indirection than writing the anchor. These templates
+  return just the class list, so a call site keeps its own markup:
+
+    <a href="/booking" class="{{template "btn_primary"}}">Booking sekarang</a>
+*/}}
+
+{{- define "btn_base" -}}
+inline-flex items-center justify-center gap-2 rounded-field px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50
+{{- end -}}
+
+{{- define "btn_primary" -}}
+{{template "btn_base"}} bg-clay-600 text-paper hover:bg-clay-500
+{{- end -}}
+
+{{- define "btn_secondary" -}}
+{{template "btn_base"}} bg-forest-700 text-paper hover:bg-forest-500
+{{- end -}}
+
+{{- define "btn_ghost" -}}
+{{template "btn_base"}} border border-line bg-paper text-ink hover:bg-paper-2
+{{- end -}}
+
+{{- define "btn_danger" -}}
+{{template "btn_base"}} bg-danger text-paper hover:opacity-90
+{{- end -}}

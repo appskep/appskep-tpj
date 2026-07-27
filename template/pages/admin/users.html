@@ -1,0 +1,128 @@
+{{/*
+  Admin — pengguna.
+
+  A mirror, not an account manager. Name and email are Appskep's and refreshed
+  from the JWT on every login, so there is nothing here to edit; the two things
+  that are local — peran and status — are toggles that post the value they want.
+
+  Three templates live here:
+
+    content              the page
+    user_toggles         one row's flag cell, shared by the table and the stream
+    user_toggles_stream  the turbo-stream reply to a toggle POST
+*/}}
+{{- define "content" -}}
+
+<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <form method="get" action="/admin/users" class="flex w-full gap-2 sm:max-w-sm">
+    <div class="relative flex-1">
+      <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
+        {{icon "search" "h-4 w-4"}}
+      </span>
+      <input type="search" name="q" value="{{.Data.Search}}" placeholder="Cari nama atau email…"
+             class="w-full rounded-field border border-line bg-paper py-2.5 pl-9 pr-3 text-sm placeholder:text-ink-faint">
+    </div>
+    <button type="submit" class="{{template "btn_ghost"}}">Cari</button>
+  </form>
+
+  <p class="text-sm text-ink-soft">{{.Data.Total}} pengguna</p>
+</div>
+
+{{if .Data.Rows}}
+  <div class="mt-5 overflow-hidden rounded-card border border-line bg-paper shadow-card">
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[52rem] text-sm">
+        <thead class="border-b border-line bg-paper-2 text-left text-xs uppercase tracking-wide text-ink-soft">
+          <tr>
+            <th scope="col" class="px-4 py-3 font-semibold">Pengguna</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Kontak</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Booking</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Login terakhir</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Akses</th>
+          </tr>
+        </thead>
+
+        <tbody class="divide-y divide-line">
+          {{range .Data.Rows}}
+            <tr class="align-middle">
+              <td class="px-4 py-3">
+                <span class="block font-semibold">{{.User.Name}}</span>
+                <span class="block text-xs text-ink-faint">Appskep #{{.User.AppskepUserID}}</span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="block text-ink-soft">{{.User.Email}}</span>
+                {{if .User.Phone.Valid}}<span class="block text-xs text-ink-faint">{{nullstr .User.Phone}}</span>{{end}}
+              </td>
+              <td class="whitespace-nowrap px-4 py-3 text-ink-soft">{{.Bookings}}</td>
+              <td class="whitespace-nowrap px-4 py-3 text-xs text-ink-faint">
+                {{if .User.LastLoginAt.Valid}}{{dateTimeID .User.LastLoginAt.Time}}{{else}}—{{end}}
+              </td>
+              <td class="px-4 py-3">
+                {{if .Self}}
+                  {{/* The toggles on your own row would only ever be refused, so
+                       the page says why instead of offering a dead button. */}}
+                  <span class="text-xs text-ink-faint">Akun Anda</span>
+                {{else}}
+                  {{template "user_toggles" .User}}
+                {{end}}
+              </td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {{template "pagination" .Data.Pager}}
+{{else}}
+  <div class="mt-5">{{template "empty" .Data.Empty}}</div>
+{{end}}
+
+{{- end -}}
+
+
+{{/*
+  One row's flag cell. Takes a handler.userToggle — an sqlc.User embedded beside
+  the CSRF token, because a define rebinds $ and cannot reach the page envelope.
+
+  Each button posts the value it wants rather than asking for a flip, so a
+  double-click or a resent request settles on the state of the last click.
+*/}}
+{{- define "user_toggles" -}}
+<div id="user-toggles-{{.ID}}" class="flex flex-wrap items-center gap-1.5">
+
+  <form method="post" action="/admin/users/{{.ID}}/aktif">
+    {{csrfField .CSRF}}
+    <input type="hidden" name="value" value="{{if .IsActive}}0{{else}}1{{end}}">
+    <button type="submit"
+            class="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-semibold transition
+                   {{if .IsActive}}bg-success-soft text-success hover:opacity-80{{else}}bg-paper-2 text-ink-faint hover:bg-line{{end}}"
+            title="{{if .IsActive}}Nonaktifkan akses{{else}}Aktifkan akses{{end}}">
+      {{if .IsActive}}{{icon "check" "h-3.5 w-3.5"}}Aktif{{else}}{{icon "ban" "h-3.5 w-3.5"}}Nonaktif{{end}}
+    </button>
+  </form>
+
+  <form method="post" action="/admin/users/{{.ID}}/peran">
+    {{csrfField .CSRF}}
+    <input type="hidden" name="value" value="{{if eq .Role "admin"}}0{{else}}1{{end}}">
+    <button type="submit"
+            class="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-semibold transition
+                   {{if eq .Role "admin"}}bg-forest-100 text-forest-700 hover:opacity-80{{else}}bg-paper-2 text-ink-faint hover:bg-line{{end}}"
+            title="{{if eq .Role "admin"}}Turunkan jadi pengguna biasa{{else}}Jadikan admin{{end}}">
+      {{icon "user" "h-3.5 w-3.5"}}
+      {{if eq .Role "admin"}}Admin{{else}}Pengguna{{end}}
+    </button>
+  </form>
+</div>
+{{- end -}}
+
+
+{{/*
+  The reply to a toggle POST. RenderStream executes against the whole view
+  envelope, hence the .Data hop to reach the user.
+*/}}
+{{- define "user_toggles_stream" -}}
+<turbo-stream action="replace" target="user-toggles-{{.Data.ID}}">
+  <template>{{template "user_toggles" .Data}}</template>
+</turbo-stream>
+{{- end -}}

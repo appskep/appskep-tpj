@@ -1,0 +1,32 @@
+{{define "booking_expired_subject"}}Booking {{.Booking.Code}} kedaluwarsa{{end}}
+
+{{define "booking_expired_html"}}
+{{template "email_open" .}}
+<h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:32px;font-weight:700;color:#1b2a22;">Batas waktu pembayaran terlewat</h1>
+<p style="margin:0 0 20px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#56645b;">
+  Halo {{.Booking.Customer}}, pembayaran untuk booking berikut tidak selesai sebelum batas waktunya, jadi jadwalnya kami lepas kembali.
+</p>
+
+{{template "email_booking_table" .}}
+
+<p style="margin:20px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#1b2a22;">
+  Tidak ada biaya yang ditagihkan. Jika Anda masih ingin datang, silakan pesan ulang — jadwal ini mungkin masih tersedia.
+</p>
+
+{{template "email_button" .}}
+{{template "email_close" .}}
+{{end}}
+
+{{define "booking_expired_text"}}Halo {{.Booking.Customer}},
+
+Pembayaran untuk booking berikut tidak selesai sebelum batas waktunya, jadi
+jadwalnya kami lepas kembali.
+
+{{template "email_booking_text" .}}
+
+Tidak ada biaya yang ditagihkan. Jika Anda masih ingin datang, silakan pesan
+ulang — jadwal ini mungkin masih tersedia.
+
+Pesan jadwal lagi:
+{{.Site.URL}}/booking
+{{template "email_footer_text" .}}{{end}}

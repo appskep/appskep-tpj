@@ -1,0 +1,46 @@
+{{define "booking_rescheduled_subject"}}Jadwal booking {{.Booking.Code}} dipindahkan{{end}}
+
+{{define "booking_rescheduled_html"}}
+{{template "email_open" .}}
+<h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:32px;font-weight:700;color:#1b2a22;">Jadwal Anda dipindahkan</h1>
+<p style="margin:0 0 20px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#56645b;">
+  Halo {{.Booking.Customer}}, jadwal untuk booking Anda telah kami pindahkan. Kode booking, layanan dan biayanya tidak berubah.
+</p>
+
+{{if .PreviousSlot}}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-bottom:20px;background-color:#f7e9cd;border-radius:8px;">
+  <tr>
+    <td style="padding:14px 16px;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:21px;color:#1b2a22;">
+      Jadwal lama: <span style="text-decoration:line-through;color:#56645b;">{{.PreviousSlot}}</span>
+    </td>
+  </tr>
+</table>
+{{end}}
+
+{{template "email_booking_table" .}}
+
+<p style="margin:20px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#1b2a22;">
+  Jika waktu yang baru tidak cocok untuk Anda, balas email ini{{if .Site.WhatsApp}} atau hubungi kami lewat WhatsApp{{end}} secepatnya.
+</p>
+
+{{template "email_button" .}}
+{{template "email_close" .}}
+{{end}}
+
+{{define "booking_rescheduled_text"}}Halo {{.Booking.Customer}},
+
+Jadwal untuk booking Anda telah kami pindahkan. Kode booking, layanan dan
+biayanya tidak berubah.
+{{if .PreviousSlot}}
+Jadwal lama: {{.PreviousSlot}}
+{{end}}
+Jadwal baru:
+
+{{template "email_booking_text" .}}
+
+Jika waktu yang baru tidak cocok untuk Anda, balas email ini{{if .Site.WhatsApp}} atau hubungi
+kami lewat WhatsApp{{end}} secepatnya.
+
+Detail booking:
+{{.Booking.URL}}
+{{template "email_footer_text" .}}{{end}}

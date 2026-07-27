@@ -1,0 +1,273 @@
+{{/*
+  Admin — detail booking.
+
+  Everything an operator needs about one booking, and the five things they can do
+  to it. Every branch below is a boolean the handler already decided: this
+  template compares nothing against a status and does no clock arithmetic.
+
+  Two of the forms answer a POST with a redirect (konfirmasi, selesai, and the
+  toggles), and two can answer 422 with this same page re-rendered (catatan,
+  batal, jadwalkan-ulang). Neither shape needs data-turbo="false": Turbo follows
+  a redirect and renders a 4xx normally — the trap is only a 200 after a POST,
+  and nothing here does that.
+*/}}
+{{- define "content" -}}
+
+<div class="mb-4">
+  <a href="/admin/booking" class="inline-flex items-center gap-1.5 text-sm font-medium text-ink-soft hover:text-ink">
+    {{icon "arrow-left" "h-4 w-4"}} Semua booking
+  </a>
+</div>
+
+<div class="grid gap-5 lg:grid-cols-3">
+
+  {{/* ------------------------------------------------------------ RINGKASAN */}}
+  <div class="lg:col-span-2 space-y-5">
+
+    <section class="rounded-card border border-line bg-paper p-5 shadow-card">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p class="font-display text-2xl font-extrabold tracking-tight">{{.Data.Booking.BookingCode}}</p>
+          <p class="mt-1 text-sm text-ink-soft">Dibuat {{dateTimeID .Data.Booking.CreatedAt}}</p>
+        </div>
+        {{template "badge" (statusBadge .Data.Booking.Status)}}
+      </div>
+
+      <dl class="mt-5 grid gap-4 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Layanan</dt>
+          <dd class="mt-1 font-medium">{{.Data.Booking.ServiceName}}</dd>
+          <dd class="text-sm text-ink-soft">{{duration .Data.Booking.ServiceDurationMinutes}}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Jadwal</dt>
+          <dd class="mt-1 font-medium">{{dateID .Data.Booking.SlotDate}}</dd>
+          <dd class="text-sm text-ink-soft">
+            {{timeRange .Data.Booking.SlotStartTime .Data.Booking.SlotEndTime}}
+            · slot {{.Data.Booking.SlotBookedCount}}/{{.Data.Booking.SlotCapacity}}
+            {{if not .Data.Booking.SlotIsActive}}· <span class="text-warning">slot nonaktif</span>{{end}}
+          </dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Total</dt>
+          <dd class="mt-1 font-display text-xl font-bold">{{rupiah .Data.Booking.PriceAmount}}</dd>
+          <dd class="text-xs text-ink-faint">Harga saat booking dibuat</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Batas pembayaran</dt>
+          <dd class="mt-1 font-medium">
+            {{if .Data.Booking.ExpiresAt.Valid}}{{dateTimeID .Data.Booking.ExpiresAt.Time}}{{else}}—{{end}}
+          </dd>
+        </div>
+      </dl>
+
+      {{if .Data.Booking.CancelledReason.Valid}}
+        <div class="mt-5 rounded-field bg-danger-soft px-4 py-3 text-sm text-danger">
+          <span class="font-semibold">Alasan pembatalan:</span> {{nullstr .Data.Booking.CancelledReason}}
+        </div>
+      {{end}}
+    </section>
+
+    {{/* ----------------------------------------------------------- PELANGGAN */}}
+    <section class="rounded-card border border-line bg-paper p-5 shadow-card">
+      <h2 class="font-display text-lg font-bold">Pelanggan</h2>
+      <dl class="mt-4 grid gap-4 sm:grid-cols-2">
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Nama di booking</dt>
+          <dd class="mt-1 font-medium">{{.Data.Booking.CustomerName}}</dd>
+        </div>
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Telepon</dt>
+          <dd class="mt-1 font-medium">
+            <a href="{{waLink .Data.Booking.CustomerPhone ""}}" target="_blank" rel="noopener"
+               class="inline-flex items-center gap-1.5 text-clay-600 hover:underline">
+              {{icon "brand-whatsapp" "h-4 w-4"}} {{.Data.Booking.CustomerPhone}}
+            </a>
+          </dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Alamat</dt>
+          <dd class="mt-1">{{if .Data.Booking.CustomerAddress.Valid}}{{nullstr .Data.Booking.CustomerAddress}}{{else}}<span class="text-ink-faint">—</span>{{end}}</dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Akun Appskep</dt>
+          <dd class="mt-1">{{.Data.Booking.UserName}} · <span class="text-ink-soft">{{.Data.Booking.UserEmail}}</span></dd>
+        </div>
+      </dl>
+    </section>
+
+    {{/* ------------------------------------------------------------ CATATAN */}}
+    <section class="rounded-card border border-line bg-paper p-5 shadow-card">
+      <h2 class="font-display text-lg font-bold">Catatan</h2>
+      <form method="post" action="/admin/booking/{{.Data.Booking.ID}}/catatan" class="mt-3">
+        {{csrfField .CSRF}}
+        <textarea name="catatan" rows="3"
+                  class="w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                         {{if index .Data.Errors "catatan"}}border-danger{{else}}border-line{{end}}"
+                  placeholder="Catatan internal, keluhan pelanggan, preferensi terapis…">{{.Data.NotesValue}}</textarea>
+        {{with index .Data.Errors "catatan"}}<p class="mt-1 text-sm text-danger">{{.}}</p>{{end}}
+        <button type="submit" class="{{template "btn_ghost"}} mt-3">Simpan catatan</button>
+      </form>
+    </section>
+
+    {{/* ---------------------------------------------------------- PEMBAYARAN */}}
+    <section class="rounded-card border border-line bg-paper p-5 shadow-card">
+      <h2 class="font-display text-lg font-bold">Pembayaran</h2>
+      {{if .Data.Payments}}
+        <div class="mt-3 overflow-x-auto">
+          <table class="w-full min-w-[36rem] text-sm">
+            <thead class="border-b border-line text-left text-xs uppercase tracking-wide text-ink-soft">
+              <tr>
+                <th scope="col" class="py-2 pr-3 font-semibold">Order ID</th>
+                <th scope="col" class="py-2 pr-3 font-semibold">Jumlah</th>
+                <th scope="col" class="py-2 pr-3 font-semibold">Metode</th>
+                <th scope="col" class="py-2 pr-3 font-semibold">Status</th>
+                <th scope="col" class="py-2 font-semibold">Dibuat</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-line">
+              {{range .Data.Payments}}
+                <tr>
+                  <td class="py-2.5 pr-3">
+                    <a href="{{.Href}}" class="font-medium text-clay-600 hover:underline">{{.Payment.OrderID}}</a>
+                  </td>
+                  <td class="whitespace-nowrap py-2.5 pr-3">{{rupiah .Payment.GrossAmount}}</td>
+                  <td class="py-2.5 pr-3 text-ink-soft">{{if .Payment.PaymentType.Valid}}{{nullstr .Payment.PaymentType}}{{else}}—{{end}}</td>
+                  <td class="py-2.5 pr-3">{{template "pill" .State}}</td>
+                  <td class="whitespace-nowrap py-2.5 text-xs text-ink-faint">{{dateTimeID .Payment.CreatedAt}}</td>
+                </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      {{else}}
+        <p class="mt-3 text-sm text-ink-soft">Belum ada percobaan pembayaran untuk booking ini.</p>
+      {{end}}
+    </section>
+
+    {{/* ------------------------------------------------------------ RIWAYAT */}}
+    <section class="rounded-card border border-line bg-paper p-5 shadow-card">
+      <h2 class="font-display text-lg font-bold">Riwayat tindakan</h2>
+      {{if .Data.Timeline}}
+        <ol class="mt-4 space-y-4">
+          {{range .Data.Timeline}}
+            <li class="flex gap-3">
+              <span class="mt-1.5 h-2 w-2 shrink-0 rounded-pill bg-clay-600"></span>
+              <div class="min-w-0">
+                <p class="text-sm font-medium">{{.Label}}</p>
+                {{if .Detail}}<p class="text-xs text-ink-soft">{{.Detail}}</p>{{end}}
+                <p class="text-xs text-ink-faint">{{dateTimeID .At}}</p>
+              </div>
+            </li>
+          {{end}}
+        </ol>
+      {{else}}
+        <p class="mt-3 text-sm text-ink-soft">Belum ada tindakan admin pada booking ini.</p>
+      {{end}}
+    </section>
+  </div>
+
+  {{/* --------------------------------------------------------------- TINDAKAN */}}
+  <div class="space-y-5">
+
+    <section class="rounded-card border border-line bg-paper p-5 shadow-card">
+      <h2 class="font-display text-lg font-bold">Tindakan</h2>
+
+      <div class="mt-4 space-y-2">
+        {{if .Data.CanConfirm}}
+          <form method="post" action="/admin/booking/{{.Data.Booking.ID}}/konfirmasi">
+            {{csrfField .CSRF}}
+            <button type="submit" class="{{template "btn_primary"}} w-full">
+              {{icon "check-circle" "h-4 w-4"}} Konfirmasi booking
+            </button>
+          </form>
+        {{end}}
+
+        {{if .Data.CanComplete}}
+          <form method="post" action="/admin/booking/{{.Data.Booking.ID}}/selesai">
+            {{csrfField .CSRF}}
+            <button type="submit" class="{{template "btn_secondary"}} w-full">
+              {{icon "check" "h-4 w-4"}} Tandai selesai
+            </button>
+          </form>
+        {{end}}
+
+        {{if not (or .Data.CanConfirm .Data.CanComplete .Data.CanCancel)}}
+          <p class="text-sm text-ink-soft">
+            Booking ini sudah selesai atau dibatalkan, jadi tidak ada tindakan yang tersisa.
+          </p>
+        {{end}}
+      </div>
+    </section>
+
+    {{if .Data.CanReschedule}}
+      {{/* The picker is a form, not the confirm dialog: a dialog's form carries
+           only the CSRF field and could not carry a chosen slot. Same constraint
+           as the Phase 5 bulk delete. */}}
+      <section class="rounded-card border border-line bg-paper p-5 shadow-card">
+        <h2 class="font-display text-lg font-bold">Pindahkan jadwal</h2>
+        {{if .Data.SlotOptions}}
+          <form method="post" action="/admin/booking/{{.Data.Booking.ID}}/jadwalkan-ulang" class="mt-3">
+            {{csrfField .CSRF}}
+            <label class="block">
+              <span class="sr-only">Jadwal tujuan</span>
+              <select name="slot"
+                      class="w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                             {{if index .Data.Errors "slot"}}border-danger{{else}}border-line{{end}}">
+                <option value="">Pilih jadwal baru…</option>
+                {{range .Data.SlotOptions}}
+                  <option value="{{.ID}}">{{.Label}} · sisa {{.Free}}</option>
+                {{end}}
+              </select>
+            </label>
+            {{with index .Data.Errors "slot"}}<p class="mt-1 text-sm text-danger">{{.}}</p>{{end}}
+            <p class="mt-2 text-xs text-ink-faint">
+              Slot lama dikembalikan dan slot baru diambil dalam satu transaksi. Harga tidak berubah.
+            </p>
+            <button type="submit" class="{{template "btn_ghost"}} mt-3 w-full">
+              {{icon "calendar-days" "h-4 w-4"}} Pindahkan
+            </button>
+          </form>
+        {{else}}
+          <p class="mt-3 text-sm text-ink-soft">Tidak ada slot kosong dalam 60 hari ke depan.</p>
+        {{end}}
+      </section>
+    {{end}}
+
+    {{if .Data.CanCancel}}
+      <section class="rounded-card border border-danger/30 bg-paper p-5 shadow-card">
+        <h2 class="font-display text-lg font-bold text-danger">Batalkan booking</h2>
+
+        {{if .Data.PaidWarning}}
+          {{/* Said in the amount the customer actually paid: this system has no
+               refund path, and an operator must not learn that afterwards. */}}
+          <div class="mt-3 rounded-field bg-warning-soft px-4 py-3 text-sm text-warning">
+            Pembayaran sebesar <span class="font-semibold">{{rupiah .Data.Booking.PriceAmount}}</span>
+            sudah masuk. Membatalkan akan mengembalikan slot, tetapi
+            <span class="font-semibold">tidak</span> mengembalikan dana — pengembalian harus
+            diproses manual di luar sistem ini.
+          </div>
+        {{end}}
+
+        <form method="post" action="/admin/booking/{{.Data.Booking.ID}}/batal" class="mt-3">
+          {{csrfField .CSRF}}
+          <label class="block">
+            <span class="mb-1 block text-xs font-semibold text-ink-soft">Alasan pembatalan</span>
+            <input type="text" name="alasan" maxlength="255"
+                   value=""
+                   placeholder="Mis. pelanggan menjadwalkan ulang lewat telepon"
+                   class="w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                          {{if index .Data.Errors "alasan"}}border-danger{{else}}border-line{{end}}">
+          </label>
+          {{with index .Data.Errors "alasan"}}<p class="mt-1 text-sm text-danger">{{.}}</p>{{end}}
+          <p class="mt-2 text-xs text-ink-faint">Alasan tercatat di riwayat tindakan dan tidak bisa diubah.</p>
+          <button type="submit" class="{{template "btn_danger"}} mt-3 w-full">
+            {{icon "ban" "h-4 w-4"}} Batalkan dan kembalikan slot
+          </button>
+        </form>
+      </section>
+    {{end}}
+  </div>
+</div>
+
+{{- end -}}

@@ -1,0 +1,136 @@
+{{/*
+  Shared email chrome.
+
+  Two rules govern every file in this directory, and both are different from the
+  rules for template/pages/:
+
+  1. ALL emails/*.html are parsed into ONE template set and executed by name, so
+     every {{define}} across this directory must be uniquely named. The
+     "one set per page" rule that governs pages exists because two pages both
+     define "content"; emails never do.
+  2. There is no layout. Go templates cannot take a template name as a variable,
+     so a wrapper that renders arbitrary content is not expressible without a
+     dict helper — which this codebase has declined twice. Each email calls
+     email_header and email_footer itself.
+
+  Styling is inline and table-based on purpose. A mail client does not fetch
+  static/css/app.css, most strip <style>, and many block remote images — so
+  there is no sprite, no logo file and no Tailwind here, only the hex values from
+  the @theme block in static/css/input.css written out by hand.
+*/}}
+
+{{define "email_header"}}
+<tr>
+  <td style="background-color:#143224;padding:24px 32px;">
+    <div style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:700;color:#faf5ef;letter-spacing:-0.01em;">{{.Site.Name}}</div>
+  </td>
+</tr>
+{{end}}
+
+{{define "email_footer"}}
+<tr>
+  <td style="background-color:#f1e7da;padding:24px 32px;border-top:1px solid #e3d4c2;">
+    <p style="margin:0 0 12px;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#56645b;">
+      Ada pertanyaan? Balas email ini{{if .Site.WhatsApp}} atau <a href="{{.Site.WhatsApp}}" style="color:#96431f;">hubungi kami di WhatsApp</a>{{end}}.
+    </p>
+    {{if .Site.Address}}<p style="margin:0 0 4px;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#56645b;">{{.Site.Address}}</p>{{end}}
+    {{if .Site.ContactPhone}}<p style="margin:0 0 12px;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#56645b;">{{.Site.ContactPhone}}</p>{{end}}
+    <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8a9690;">
+      Email ini dikirim otomatis oleh {{.Site.Name}} karena ada aktivitas pada booking Anda.
+    </p>
+  </td>
+</tr>
+{{end}}
+
+{{/*
+  The booking summary block, shared by every email. It is defined here rather
+  than repeated six times so a field cannot be right in one mail and missing in
+  another.
+*/}}
+{{define "email_booking_table"}}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background-color:#faf5ef;border:1px solid #e3d4c2;border-radius:8px;">
+  <tr>
+    <td style="padding:8px 16px 4px;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8a9690;text-transform:uppercase;letter-spacing:0.06em;">Kode booking</td>
+  </tr>
+  <tr>
+    <td style="padding:0 16px 12px;font-family:'Courier New',Courier,monospace;font-size:20px;line-height:26px;font-weight:700;color:#1b2a22;">{{.Booking.Code}}</td>
+  </tr>
+  <tr>
+    <td style="padding:0 16px 12px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+        <tr>
+          <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#56645b;width:110px;">Layanan</td>
+          <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#1b2a22;font-weight:600;">{{.Booking.Service}}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#56645b;">Tanggal</td>
+          <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#1b2a22;font-weight:600;">{{dateID .Booking.Date}}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#56645b;">Waktu</td>
+          <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#1b2a22;font-weight:600;">{{timeRange .Booking.StartTime .Booking.EndTime}} WIB &middot; {{duration .Booking.Duration}}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#56645b;">Atas nama</td>
+          <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#1b2a22;font-weight:600;">{{.Booking.Customer}}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#56645b;">Biaya</td>
+          <td style="padding:6px 0;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:20px;color:#1b2a22;font-weight:600;">{{rupiah .Booking.Amount}}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+{{end}}
+
+{{/* The clay call-to-action button. text and href come from the caller's data. */}}
+{{define "email_button"}}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:24px 0 8px;">
+  <tr>
+    <td style="background-color:#b4552f;border-radius:6px;">
+      <a href="{{.Booking.URL}}" style="display:inline-block;padding:12px 24px;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">{{.ButtonLabel}}</a>
+    </td>
+  </tr>
+</table>
+{{end}}
+
+{{/* The text-part equivalents of the two blocks above. */}}
+{{define "email_booking_text"}}Kode booking : {{.Booking.Code}}
+Layanan      : {{.Booking.Service}}
+Tanggal      : {{dateID .Booking.Date}}
+Waktu        : {{timeRange .Booking.StartTime .Booking.EndTime}} WIB ({{duration .Booking.Duration}})
+Atas nama    : {{.Booking.Customer}}
+Biaya        : {{rupiah .Booking.Amount}}{{end}}
+
+{{define "email_footer_text"}}
+--
+Ada pertanyaan? Balas email ini{{if .Site.WhatsApp}} atau hubungi kami di WhatsApp: {{.Site.WhatsApp}}{{end}}.
+{{if .Site.Address}}{{.Site.Address}}
+{{end}}{{if .Site.ContactPhone}}{{.Site.ContactPhone}}
+{{end}}
+Email ini dikirim otomatis oleh {{.Site.Name}} karena ada aktivitas pada booking Anda.{{end}}
+
+{{/*
+  The document shell. Each email's _html define wraps its own body in this by
+  calling email_open / email_close around it.
+*/}}
+{{define "email_open"}}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background-color:#f1e7da;margin:0;padding:24px 0;">
+  <tr>
+    <td align="center" style="padding:0 12px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="border-collapse:collapse;max-width:600px;width:100%;background-color:#ffffff;border-radius:10px;overflow:hidden;">
+        {{template "email_header" .}}
+        <tr>
+          <td style="padding:32px;">
+{{end}}
+
+{{define "email_close"}}
+          </td>
+        </tr>
+        {{template "email_footer" .}}
+      </table>
+    </td>
+  </tr>
+</table>
+{{end}}

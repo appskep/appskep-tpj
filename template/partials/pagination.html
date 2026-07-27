@@ -1,0 +1,35 @@
+{{/*
+  Pagination. Takes {Page, TotalPages, BaseURL} — BaseURL carries any active
+  filters and ends with ? or &, so the page number can be appended.
+
+  Prev/next only, with a page counter: the admin lists this serves are sorted and
+  filtered, so jumping to page 7 of 40 is not a real navigation. Phase 10 can add
+  numbered links if a list turns out to need them.
+*/}}
+{{- define "pagination" -}}
+{{if gt .TotalPages 1}}
+<nav class="mt-6 flex items-center justify-between gap-4" aria-label="Navigasi halaman">
+  {{if gt .Page 1}}
+    <a href="{{.BaseURL}}page={{add .Page -1}}" class="{{template "btn_ghost"}}" rel="prev">
+      {{icon "chevron-left" "h-4 w-4"}} Sebelumnya
+    </a>
+  {{else}}
+    <span class="{{template "btn_ghost"}} pointer-events-none opacity-40" aria-hidden="true">
+      {{icon "chevron-left" "h-4 w-4"}} Sebelumnya
+    </span>
+  {{end}}
+
+  <p class="text-sm text-ink-soft">Halaman {{.Page}} dari {{.TotalPages}}</p>
+
+  {{if lt .Page .TotalPages}}
+    <a href="{{.BaseURL}}page={{add .Page 1}}" class="{{template "btn_ghost"}}" rel="next">
+      Berikutnya {{icon "chevron-right" "h-4 w-4"}}
+    </a>
+  {{else}}
+    <span class="{{template "btn_ghost"}} pointer-events-none opacity-40" aria-hidden="true">
+      Berikutnya {{icon "chevron-right" "h-4 w-4"}}
+    </span>
+  {{end}}
+</nav>
+{{end}}
+{{- end -}}

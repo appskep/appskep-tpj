@@ -1,0 +1,29 @@
+# binaries
+/bin/
+/tmp/
+
+# downloaded toolchain (the pinned Tailwind standalone CLI)
+/.tools/
+
+# environment & secrets
+.env
+.env.local
+
+# uploads (runtime user content)
+/static/uploads/
+
+# node — not used: Tailwind is the standalone CLI, downloaded into /.tools by
+# the Makefile. Kept so a stray npm install cannot be committed by accident.
+node_modules/
+
+# generated css. The vendored assets next to it (static/js/turbo.js,
+# static/img/icons.svg, static/fonts/*.woff2) are committed on purpose so a clean
+# checkout builds and runs with no network — only app.css is a build output.
+/static/css/app.css
+
+# os
+*.DS_Store
+
+# editor
+.idea/
+.vscode/

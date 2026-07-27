@@ -1,0 +1,148 @@
+{{/*
+  Admin — tambah / ubah slot.
+
+  One template for both, driven by .Data.IsNew, exactly as layanan-form.html is.
+  Every value comes from .Data.Form, which holds what was submitted rather than
+  what was parsed, so a rejected save re-renders what the admin typed.
+
+  .Data.Locked marks a slot that already holds bookings: its date and times are
+  shown but not editable, because moving them would reschedule a paying customer
+  with no notification and no record that the agreed time ever changed. The
+  service enforces the same rule on the way in — a disabled input is an
+  affordance, not a guarantee.
+*/}}
+{{- define "content" -}}
+
+<form method="post" action="{{.Data.Action}}" class="max-w-3xl">
+  {{csrfField .CSRF}}
+
+  {{if .Data.Locked}}
+    <div class="mb-5 flex items-start gap-3 rounded-card border border-warning/30 bg-warning-soft p-4">
+      <span class="grid h-9 w-9 shrink-0 place-items-center rounded-pill bg-paper text-warning">
+        {{icon "alert-triangle" "h-4 w-4"}}
+      </span>
+      <div class="min-w-0">
+        <p class="text-sm font-semibold">Slot ini sudah punya {{.Data.Slot.BookedCount}} booking.</p>
+        <p class="mt-1 text-sm text-ink-soft">
+          Tanggal dan jamnya tidak bisa diubah lagi supaya jadwal pelanggan tidak bergeser diam-diam.
+          Kapasitas dan catatan tetap bisa disesuaikan. Untuk memindahkan booking tertentu,
+          gunakan menu Booking.
+        </p>
+      </div>
+    </div>
+  {{end}}
+
+  <div class="rounded-card border border-line bg-paper p-6">
+    <h2 class="font-display text-lg font-bold">Waktu</h2>
+
+    <div class="mt-5 grid gap-5">
+      {{/* Tanggal */}}
+      <div class="sm:max-w-[16rem]">
+        <label for="date" class="block text-sm font-semibold">Tanggal</label>
+        <input type="date" id="date" name="date" value="{{.Data.Form.Date}}" required
+               {{if .Data.Locked}}disabled{{end}}
+               class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                      disabled:cursor-not-allowed disabled:bg-paper-2 disabled:text-ink-faint
+                      {{if index .Data.Errors "date"}}border-danger{{else}}border-line{{end}}">
+        {{with index .Data.Errors "date"}}
+          <p class="mt-1 text-sm text-danger">{{.}}</p>
+        {{end}}
+      </div>
+
+      <div class="grid gap-5 sm:grid-cols-2 sm:max-w-lg">
+        {{/* Jam mulai */}}
+        <div>
+          <label for="start_time" class="block text-sm font-semibold">Jam mulai</label>
+          <input type="time" id="start_time" name="start_time" value="{{.Data.Form.StartTime}}" required
+                 step="300" {{if .Data.Locked}}disabled{{end}}
+                 class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                        disabled:cursor-not-allowed disabled:bg-paper-2 disabled:text-ink-faint
+                        {{if index .Data.Errors "start_time"}}border-danger{{else}}border-line{{end}}">
+          {{with index .Data.Errors "start_time"}}
+            <p class="mt-1 text-sm text-danger">{{.}}</p>
+          {{end}}
+        </div>
+
+        {{/* Jam selesai */}}
+        <div>
+          <label for="end_time" class="block text-sm font-semibold">Jam selesai</label>
+          <input type="time" id="end_time" name="end_time" value="{{.Data.Form.EndTime}}" required
+                 step="300" {{if .Data.Locked}}disabled{{end}}
+                 class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                        disabled:cursor-not-allowed disabled:bg-paper-2 disabled:text-ink-faint
+                        {{if index .Data.Errors "end_time"}}border-danger{{else}}border-line{{end}}">
+          {{with index .Data.Errors "end_time"}}
+            <p class="mt-1 text-sm text-danger">{{.}}</p>
+          {{else}}
+            <p class="mt-1 text-xs text-ink-faint">Durasi 15–480 menit. Standar: 150 (2,5 jam).</p>
+          {{end}}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-5 rounded-card border border-line bg-paper p-6">
+    <h2 class="font-display text-lg font-bold">Kapasitas &amp; catatan</h2>
+
+    <div class="mt-5 grid gap-5">
+      {{/* Kapasitas */}}
+      <div class="sm:max-w-[12rem]">
+        <label for="capacity" class="block text-sm font-semibold">Kapasitas</label>
+        <input type="number" id="capacity" name="capacity" value="{{.Data.Form.Capacity}}" required
+               min="{{.Data.MinCapacity}}" max="20" step="1"
+               class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                      {{if index .Data.Errors "capacity"}}border-danger{{else}}border-line{{end}}">
+        {{with index .Data.Errors "capacity"}}
+          <p class="mt-1 text-sm text-danger">{{.}}</p>
+        {{else}}
+          <p class="mt-1 text-xs text-ink-faint">
+            {{if .Data.Locked}}
+              Minimal {{.Data.MinCapacity}} — sudah ada booking sebanyak itu.
+            {{else}}
+              Berapa booking yang bisa berjalan bersamaan di jam ini.
+            {{end}}
+          </p>
+        {{end}}
+      </div>
+
+      {{/* Catatan */}}
+      <div>
+        <label for="note" class="block text-sm font-semibold">Catatan</label>
+        <input type="text" id="note" name="note" value="{{.Data.Form.Note}}" maxlength="255"
+               class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                      {{if index .Data.Errors "note"}}border-danger{{else}}border-line{{end}}">
+        {{with index .Data.Errors "note"}}
+          <p class="mt-1 text-sm text-danger">{{.}}</p>
+        {{else}}
+          <p class="mt-1 text-xs text-ink-faint">Opsional. Hanya terlihat di panel admin.</p>
+        {{end}}
+      </div>
+    </div>
+  </div>
+
+  {{/* Status */}}
+  <div class="mt-5 rounded-card border border-line bg-paper p-6">
+    <h2 class="font-display text-lg font-bold">Status</h2>
+
+    <label class="mt-4 flex items-start gap-3 text-sm">
+      <input type="checkbox" name="is_active" value="1" {{if .Data.Form.IsActive}}checked{{end}}
+             class="mt-0.5 h-4 w-4 rounded border-line text-clay-600">
+      <span>
+        <span class="font-semibold">Aktif</span>
+        <span class="block text-xs text-ink-soft">
+          Bisa dipesan pelanggan. Nonaktif berarti tetap tersimpan tapi hilang dari pilihan booking.
+        </span>
+      </span>
+    </label>
+  </div>
+
+  <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+    <a href="/admin/jadwal" class="{{template "btn_ghost"}}">Batal</a>
+    <button type="submit" class="{{template "btn_primary"}}">
+      {{icon "check" "h-4 w-4"}}
+      {{if .Data.IsNew}}Tambah slot{{else}}Simpan perubahan{{end}}
+    </button>
+  </div>
+</form>
+
+{{- end -}}

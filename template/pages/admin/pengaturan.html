@@ -1,0 +1,60 @@
+{{/*
+  Admin — pengaturan.
+
+  The rows come from service.EditableSettings, in its order. Nothing about which
+  keys exist lives in this file: adding a setting means adding it to that table,
+  and the form follows.
+
+  A save redirects, so Turbo handles it without data-turbo="false"; a rejected
+  save answers 422 with this page re-rendered, which Turbo also renders normally.
+*/}}
+{{- define "content" -}}
+
+<form method="post" action="/admin/pengaturan" class="mx-auto max-w-3xl">
+  {{csrfField .CSRF}}
+
+  {{if .Data.HasErrors}}
+    {{/* A form this long can put a rejected field below the fold, so the page
+         says so at the top as well as beside the input. */}}
+    <div class="mb-4 flex items-start gap-3 rounded-card bg-danger-soft px-4 py-3 text-sm font-medium text-danger" role="status">
+      {{icon "alert-circle" "mt-0.5 h-4.5 w-4.5 shrink-0"}}
+      <p>Ada isian yang belum benar. Perbaiki yang ditandai merah di bawah, lalu simpan lagi.</p>
+    </div>
+  {{end}}
+
+  <div class="space-y-4 rounded-card border border-line bg-paper p-5 shadow-card">
+    {{range .Data.Rows}}
+      <div>
+        <label for="setting-{{.Field.Key}}" class="mb-1 block text-sm font-semibold">{{.Field.Label}}</label>
+
+        {{if .Field.Multiline}}
+          <textarea id="setting-{{.Field.Key}}" name="{{.Field.Key}}" rows="3"
+                    class="w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                           {{if .Error}}border-danger{{else}}border-line{{end}}">{{.Value}}</textarea>
+        {{else if .Field.Numeric}}
+          <input id="setting-{{.Field.Key}}" name="{{.Field.Key}}" type="number" inputmode="numeric"
+                 min="{{.Field.Min}}" max="{{.Field.Max}}" value="{{.Value}}"
+                 class="w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                        {{if .Error}}border-danger{{else}}border-line{{end}}">
+        {{else}}
+          <input id="setting-{{.Field.Key}}" name="{{.Field.Key}}" type="text" value="{{.Value}}"
+                 class="w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                        {{if .Error}}border-danger{{else}}border-line{{end}}">
+        {{end}}
+
+        {{if .Error}}
+          <p class="mt-1 text-sm text-danger">{{.Error}}</p>
+        {{else}}
+          <p class="mt-1 text-xs text-ink-faint">{{.Field.Key}}</p>
+        {{end}}
+      </div>
+    {{end}}
+  </div>
+
+  <div class="mt-4 flex items-center gap-3">
+    <button type="submit" class="{{template "btn_primary"}}">{{icon "check" "h-4 w-4"}} Simpan pengaturan</button>
+    <p class="text-xs text-ink-faint">Perubahan langsung berlaku, tanpa perlu restart.</p>
+  </div>
+</form>
+
+{{- end -}}

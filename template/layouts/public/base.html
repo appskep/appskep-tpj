@@ -1,0 +1,231 @@
+{{/*
+  Public site chrome.
+
+  The header and footer are forest-950 surfaces: deep green is the structural
+  colour in this design, and clay is reserved for actions. Every page under
+  pages/public/ defines "content" and is rendered into this layout.
+*/}}
+{{- define "base" -}}
+<!doctype html>
+<html lang="id" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>{{if .Page.Title}}{{.Page.Title}} — {{end}}{{.Site.Name}}</title>
+  <meta name="description" content="{{.Page.Description}}">
+  {{if .Page.NoIndex}}<meta name="robots" content="noindex">{{end}}
+  <link rel="canonical" href="{{.Page.Canonical}}">
+
+  {{/* Open Graph. OGType, Canonical and the absolute OGImage are resolved by
+       Renderer.fill, so a handler sets at most a site-relative image path. */}}
+  <meta property="og:type" content="{{.Page.OGType}}">
+  <meta property="og:site_name" content="{{.Site.Name}}">
+  <meta property="og:title" content="{{if .Page.Title}}{{.Page.Title}}{{else}}{{.Site.Name}}{{end}}">
+  <meta property="og:description" content="{{.Page.Description}}">
+  <meta property="og:url" content="{{.Page.Canonical}}">
+  {{if .Page.OGImage}}<meta property="og:image" content="{{.Page.OGImage}}">{{end}}
+  <meta name="twitter:card" content="{{if .Page.OGImage}}summary_large_image{{else}}summary{{end}}">
+
+  <meta name="theme-color" content="#0e2419">
+  <link rel="icon" href="{{asset "/static/img/favicon.svg"}}" type="image/svg+xml">
+
+  {{/* Preload the body face: it is used for every line of text on the page, so
+       discovering it via the stylesheet costs a visible reflow. */}}
+  <link rel="preload" href="{{asset "/static/fonts/plus-jakarta-sans-var.woff2"}}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{asset "/static/css/app.css"}}">
+  <script src="{{asset "/static/js/turbo.js"}}" defer></script>
+  {{/* The app's own JS, after Turbo so its turbo:load listener is registered
+       before the first one fires. Everything in it is enhancement: with the file
+       blocked, the dialogs still submit and the payment panel still renders. */}}
+  <script src="{{asset "/static/js/app.js"}}" defer></script>
+</head>
+
+<body class="flex min-h-full flex-col bg-paper text-ink">
+
+  <a href="#content" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-field focus:bg-clay-600 focus:px-4 focus:py-2 focus:text-paper">
+    Lompat ke konten
+  </a>
+
+  {{template "public_header" .}}
+
+  {{/* Flash region. Phase 3 populates View.Flash from the session. */}}
+  {{if .Flash}}
+    <div class="mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6">
+      {{range .Flash}}{{template "alert" .}}{{end}}
+    </div>
+  {{end}}
+
+  <main id="content" class="flex-1">
+    {{template "content" .}}
+  </main>
+
+  {{template "public_footer" .}}
+</body>
+</html>
+{{- end -}}
+
+
+{{- define "public_header" -}}
+{{/* The mobile menu is a checkbox toggle rather than JavaScript: it is the only
+     interactive chrome on the page, and Turbo Drive replaces the body on every
+     navigation, which would reset any JS-held open state anyway. */}}
+{{/* print:hidden on the chrome, so Ctrl-P on any public page yields the content
+     and not a dark navigation bar. The konfirmasi page is the one people
+     actually print, but there is no reason for the rest to print badly. */}}
+<header class="sticky top-0 z-40 bg-forest-950 text-paper print:hidden">
+  <div class="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6">
+
+    <a href="/" class="flex shrink-0 items-center gap-2 font-display text-lg font-bold tracking-tight">
+      {{/* The wordmark: "jompo" in clay, because that is the joke. */}}
+      <span class="grid h-8 w-8 place-items-center rounded-field bg-clay-600 font-black">T</span>
+      <span class="hidden sm:inline">Terapi Pemuda <span class="text-clay-500">Jompo</span></span>
+      <span class="sm:hidden">TPJ</span>
+    </a>
+
+    <nav class="ml-auto hidden items-center gap-1 md:flex" aria-label="Navigasi utama">
+      {{$path := .Page.Path}}
+      {{range $item := publicNav}}
+        <a href="{{$item.Href}}"
+           class="rounded-field px-3 py-2 text-sm font-medium transition hover:bg-forest-900
+                  {{if activeNav $path $item.Href}}bg-forest-900 text-paper{{else}}text-paper/75{{end}}"
+           {{if activeNav $path $item.Href}}aria-current="page"{{end}}>
+          {{$item.Label}}
+        </a>
+      {{end}}
+    </nav>
+
+    <div class="ml-auto flex items-center gap-2 md:ml-0">
+      {{if .User}}
+        <a href="/profil" class="flex items-center gap-2 rounded-pill bg-forest-900 py-1.5 pl-1.5 pr-3 text-sm font-medium transition hover:bg-forest-700">
+          {{/* The uploaded avatar when there is one, the initial when there is
+               not. Explicit dimensions and object-cover so a portrait photo does
+               not stretch the chip or reflow the header as it loads. */}}
+          {{if .User.AvatarPath}}
+            <img src="{{asset (printf "/static/%s" .User.AvatarPath)}}" alt=""
+                 width="28" height="28"
+                 class="h-7 w-7 rounded-pill object-cover">
+          {{else}}
+            <span class="grid h-7 w-7 place-items-center rounded-pill bg-clay-600 text-xs font-bold">{{.User.Initial}}</span>
+          {{end}}
+          <span class="hidden max-w-24 truncate sm:inline">{{.User.Name}}</span>
+        </a>
+        {{/*
+          A form, not a link: a GET that ends a session is triggerable by any
+          cross-site <img src="/logout">, and Turbo 8's hover prefetch would end
+          it on mouseover. Both problems disappear with the method, and the CSRF
+          token is what a POST needs anyway.
+        */}}
+        <form method="post" action="/logout">
+          {{csrfField .CSRF}}
+          <button type="submit" class="grid h-9 w-9 place-items-center rounded-pill text-paper/70 transition hover:bg-forest-900 hover:text-paper" title="Keluar">
+            <span class="sr-only">Keluar</span>
+            {{icon "log-out" "h-4.5 w-4.5"}}
+          </button>
+        </form>
+      {{else}}
+        <a href="{{loginURL .Page.Path}}" class="rounded-field px-3 py-2 text-sm font-medium text-paper/75 transition hover:text-paper">
+          Masuk
+        </a>
+      {{end}}
+
+      <a href="/booking" class="hidden rounded-field bg-clay-600 px-4 py-2 text-sm font-semibold text-paper transition hover:bg-clay-500 sm:inline-block">
+        Booking
+      </a>
+
+      {{/* Mobile menu toggle. */}}
+      <label for="nav-toggle" class="grid h-10 w-10 cursor-pointer place-items-center rounded-field transition hover:bg-forest-900 md:hidden">
+        <span class="sr-only">Buka menu</span>
+        {{icon "menu" "h-5 w-5"}}
+      </label>
+    </div>
+  </div>
+
+  <input type="checkbox" id="nav-toggle" class="peer sr-only">
+  <nav class="hidden border-t border-forest-900 peer-checked:block md:!hidden" aria-label="Navigasi utama">
+    <div class="mx-auto flex max-w-6xl flex-col px-4 py-2 sm:px-6">
+      {{range $item := publicNav}}
+        <a href="{{$item.Href}}" class="rounded-field px-3 py-3 text-sm font-medium text-paper/85 transition hover:bg-forest-900">
+          {{$item.Label}}
+        </a>
+      {{end}}
+      {{if .User}}
+        <a href="/profil" class="rounded-field px-3 py-3 text-sm font-medium text-paper/85 transition hover:bg-forest-900">
+          Profil
+        </a>
+        <form method="post" action="/logout">
+          {{csrfField .CSRF}}
+          <button type="submit" class="w-full rounded-field px-3 py-3 text-left text-sm font-medium text-paper/85 transition hover:bg-forest-900">
+            Keluar
+          </button>
+        </form>
+      {{else}}
+        <a href="{{loginURL .Page.Path}}" class="rounded-field px-3 py-3 text-sm font-medium text-paper/85 transition hover:bg-forest-900">
+          Masuk
+        </a>
+      {{end}}
+    </div>
+  </nav>
+</header>
+{{- end -}}
+
+
+{{- define "public_footer" -}}
+<footer class="mt-24 bg-forest-950 text-paper/70 print:hidden">
+  <div class="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+    <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+
+      <div class="lg:col-span-2">
+        <p class="font-display text-xl font-bold text-paper">
+          Terapi Pemuda <span class="text-clay-500">Jompo</span>
+        </p>
+        {{if .Site.Tagline}}<p class="mt-2 max-w-sm text-sm">{{.Site.Tagline}}</p>{{end}}
+
+        <div class="mt-5 flex gap-2">
+          {{if .Site.WhatsApp}}
+            <a href="{{waLink .Site.WhatsApp "Halo, saya mau tanya soal jadwal terapi."}}"
+               class="flex items-center gap-2 rounded-field bg-forest-900 px-3 py-2 text-sm font-medium text-paper transition hover:bg-forest-700">
+              {{icon "brand-whatsapp" "h-4 w-4"}} WhatsApp
+            </a>
+          {{end}}
+          {{if .Site.Instagram}}
+            <a href="{{.Site.Instagram}}" rel="noopener noreferrer" target="_blank"
+               class="flex items-center gap-2 rounded-field bg-forest-900 px-3 py-2 text-sm font-medium text-paper transition hover:bg-forest-700">
+              {{icon "brand-instagram" "h-4 w-4"}} Instagram
+            </a>
+          {{end}}
+        </div>
+      </div>
+
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-paper/50">Jelajahi</p>
+        <ul class="mt-3 space-y-2 text-sm">
+          <li><a href="/layanan" class="transition hover:text-paper">Layanan</a></li>
+          <li><a href="/booking" class="transition hover:text-paper">Booking</a></li>
+          <li><a href="/riwayat" class="transition hover:text-paper">Riwayat booking</a></li>
+          <li><a href="/profil" class="transition hover:text-paper">Profil</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-paper/50">Kontak</p>
+        <ul class="mt-3 space-y-3 text-sm">
+          {{if .Site.Phone}}
+            <li class="flex items-start gap-2">{{icon "phone" "mt-0.5 h-4 w-4 shrink-0"}}<span>{{.Site.Phone}}</span></li>
+          {{end}}
+          {{if .Site.Email}}
+            <li class="flex items-start gap-2">{{icon "mail" "mt-0.5 h-4 w-4 shrink-0"}}<a href="mailto:{{.Site.Email}}" class="transition hover:text-paper">{{.Site.Email}}</a></li>
+          {{end}}
+          {{if .Site.Address}}
+            <li class="flex items-start gap-2">{{icon "map-pin" "mt-0.5 h-4 w-4 shrink-0"}}<span>{{.Site.Address}}</span></li>
+          {{end}}
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-12 border-t border-forest-900 pt-6 text-xs">
+      © {{.Site.Year}} {{.Site.Name}}. Semua hak dilindungi.
+    </div>
+  </div>
+</footer>
+{{- end -}}

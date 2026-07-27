@@ -1,0 +1,55 @@
+appskep tpj (terapi pemuda jompo)
+
+deskripsi: sistem untuk booking dan pembayaran online.
+
+tech:
+- golang monolith
+- chi router
+- sqlc
+- mariadb
+- go html template
+- tailwindcss
+- lucide icons (+ simple icons for brands)
+- hotwire turbo
+
+ada 2 sistem:
+- admin panel
+- public website
+
+public website:
+- halaman landing / home
+- halaman layanan
+- halaman booking
+- halaman pembayaran
+- halaman konfirmasi
+- halaman riwayat booking
+- halaman profil
+- halaman login
+- halaman register
+- halaman forgot password
+- halaman reset password
+- halaman verify email
+- halaman resend verification email
+
+
+layanan
+- Urut Therapeutic : Terapi fisik guna mengurangi nyeri otot, demam, dan insomnia. Rp 75000.
+- Massage Therapeutic : Terapi fisik untuk relaksasi, demam, cedera, dan insomnia. Dilengkapi dengan fasilitas VIP berupa kasur terapi, aromaterapi, dan bekam kering. Rp 150000.
+- Bekam Therapeutic : Terapi fisik dan bekam basah guna mendukung pemulihan tubuh, pengobatan, dan kesuburan. Dilengkapi fasilitas massage VIP, bekam kering, dan bekam luncur. Rp 300000.
+
+layanan dapat di set aktif/tidak di admin panel.
+layanan dapat di set harga, durasi, dan gambar. 
+layanan dapat ditambahkan flag coming_soon. jika aktif dan coming soon, maka akan ada label coming soon di public website. 
+
+penjadwalan: 
+admin dapat mengatur slot jadwal (tanggal, range waktu). ada pilihan untuk generate jadwal pada range tanggal tertentu dengan range waktu default (2,5 jam untuk 1 jadwal).
+
+akun user menggunakan akun appskep (dev-auth.appskep.id). user dapat login menggunakan username dan password appskep.
+pelajari cara penggunaannya di file authentication.md
+
+pembayaran:
+menggunakan akun midtrans appskep. develop di mode sandbox terlebih dahulu. 
+gunakan prefix "tpj" untuk sistem ini. pelajari penggunaan prefix di file create-order.md.
+MIDTRANS_ENV=midtrans.Sandbox
+MIDTRANS_SERVER_KEY=SB-Mid-server-tWoZL9Wie7eL6Vg_72Qlf2de
+MIDTRANS_CLIENT_KEY=SB-Mid-client-gHFFZLWjkJx6uhIY

@@ -1,0 +1,101 @@
+{{/*
+  Admin — daftar pembayaran.
+
+  A payment has no status column: its state is derived from paid_at /
+  expired_at / cancelled_at, computed once in SQL and carried on the row. The
+  chips filter on that same derived value, so a chip and the pill beside it
+  cannot disagree.
+*/}}
+{{- define "content" -}}
+
+<form method="get" action="/admin/pembayaran" class="rounded-card border border-line bg-paper p-4">
+  <div class="grid gap-3 sm:grid-cols-3">
+    <label class="block">
+      <span class="mb-1 block text-xs font-semibold text-ink-soft">Cari</span>
+      <input type="search" name="q" value="{{.Data.Values.Search}}" placeholder="Order ID atau kode booking…"
+             class="w-full rounded-field border border-line bg-paper px-3 py-2.5 text-sm placeholder:text-ink-faint">
+    </label>
+    <label class="block">
+      <span class="mb-1 block text-xs font-semibold text-ink-soft">Dari</span>
+      <input type="date" name="dari" value="{{.Data.Values.From}}"
+             class="w-full rounded-field border border-line bg-paper px-3 py-2.5 text-sm">
+    </label>
+    <label class="block">
+      <span class="mb-1 block text-xs font-semibold text-ink-soft">Sampai</span>
+      <input type="date" name="sampai" value="{{.Data.Values.To}}"
+             class="w-full rounded-field border border-line bg-paper px-3 py-2.5 text-sm">
+    </label>
+  </div>
+
+  <input type="hidden" name="status" value="{{.Data.Values.State}}">
+
+  <div class="mt-3 flex flex-wrap items-center gap-2">
+    <button type="submit" class="{{template "btn_primary"}}">{{icon "filter" "h-4 w-4"}} Terapkan</button>
+    <a href="/admin/pembayaran" class="{{template "btn_ghost"}}">Reset</a>
+    <a href="{{.Data.ExportHref}}" data-turbo="false" class="{{template "btn_ghost"}} ml-auto">
+      {{icon "download" "h-4 w-4"}} Ekspor CSV
+    </a>
+  </div>
+</form>
+
+<div class="mt-4 flex flex-wrap gap-1.5">
+  {{range .Data.Filters}}
+    <a href="{{.Href}}"
+       class="rounded-pill px-3 py-1.5 text-xs font-semibold transition
+              {{if .Selected}}bg-clay-600 text-paper{{else}}bg-paper text-ink-soft hover:bg-paper-2{{end}}">
+      {{.Label}}
+    </a>
+  {{end}}
+</div>
+
+{{if .Data.Rows}}
+  <div class="mt-5 overflow-hidden rounded-card border border-line bg-paper shadow-card">
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[58rem] text-sm">
+        <thead class="border-b border-line bg-paper-2 text-left text-xs uppercase tracking-wide text-ink-soft">
+          <tr>
+            <th scope="col" class="px-4 py-3 font-semibold">Order ID</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Booking</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Pelanggan</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Jumlah</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Metode</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Status</th>
+            <th scope="col" class="px-4 py-3 text-right font-semibold">Dibuat</th>
+          </tr>
+        </thead>
+
+        <tbody class="divide-y divide-line">
+          {{range .Data.Rows}}
+            <tr class="align-middle transition hover:bg-paper-2">
+              <td class="px-4 py-3">
+                <a href="{{.Href}}" class="font-medium text-clay-600 hover:underline">{{.Payment.OrderID}}</a>
+              </td>
+              <td class="whitespace-nowrap px-4 py-3">
+                <a href="{{.BookingHref}}" class="font-medium hover:underline">{{.Payment.BookingCode}}</a>
+                <span class="block text-xs text-ink-faint">{{.Payment.ServiceName}}</span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="block">{{.Payment.UserName}}</span>
+                <span class="block text-xs text-ink-faint">{{.Payment.UserEmail}}</span>
+              </td>
+              <td class="whitespace-nowrap px-4 py-3 font-medium">{{rupiah .Payment.GrossAmount}}</td>
+              <td class="px-4 py-3 text-ink-soft">
+                {{if .Payment.PaymentType.Valid}}{{nullstr .Payment.PaymentType}}{{else}}—{{end}}
+              </td>
+              <td class="px-4 py-3">{{template "badge" (paymentBadge .Payment.State)}}</td>
+              <td class="whitespace-nowrap px-4 py-3 text-right text-xs text-ink-faint">{{dateTimeID .Payment.CreatedAt}}</td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {{template "pagination" .Data.Pager}}
+
+  <p class="mt-4 text-xs text-ink-faint">{{.Data.Total}} pembayaran</p>
+{{else}}
+  <div class="mt-5">{{template "empty" .Data.Empty}}</div>
+{{end}}
+
+{{- end -}}

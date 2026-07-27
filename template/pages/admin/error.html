@@ -1,0 +1,20 @@
+{{/*
+  Admin error page — same statuses, admin chrome. Data is app.errorCopy.
+
+  Kept inside the admin layout on purpose: an operator who mistypes a URL should
+  stay in the panel with the sidebar intact, not get bounced to the public site.
+*/}}
+{{- define "content" -}}
+<div class="mx-auto max-w-lg rounded-card border border-line bg-paper px-6 py-14 text-center">
+
+  <p class="font-display text-6xl font-extrabold text-clay-200">{{.Data.Status}}</p>
+
+  <h2 class="mt-4 font-display text-2xl font-extrabold">{{.Data.Title}}</h2>
+  <p class="mt-2 text-sm text-ink-soft">{{.Data.Message}}</p>
+
+  <div class="mt-8 flex flex-wrap justify-center gap-3">
+    <a href="/admin" class="{{template "btn_primary"}}">Ke dasbor</a>
+    <a href="{{.Data.ActionHref}}" class="{{template "btn_ghost"}}">{{.Data.ActionLabel}}</a>
+  </div>
+</div>
+{{- end -}}

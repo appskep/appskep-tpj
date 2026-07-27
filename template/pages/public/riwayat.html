@@ -1,0 +1,98 @@
+{{/*
+  /riwayat — the customer's own bookings, newest first.
+
+  Cards rather than a table. A table is right for the admin list, where the
+  columns are compared against each other; here each row is one booking a person
+  is trying to recognise, and on a phone a table of six columns becomes a
+  horizontal scroll to read a date.
+
+  Every row's status, price and action are already decided by the handler
+  (riwayatRow) — "can this still be paid" depends on the clock, and the ticker
+  runs on an interval, so it is not a question a template may answer.
+*/}}
+{{- define "content" -}}
+<div class="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:py-12">
+
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 class="font-display text-3xl font-extrabold tracking-tight">Riwayat booking</h1>
+      <p class="mt-2 text-ink-soft">
+        {{if .Data.Rows}}{{.Data.Total}} booking{{else}}Semua booking kamu muncul di sini.{{end}}
+      </p>
+    </div>
+    <a href="/layanan" class="{{template "btn_secondary"}}">
+      {{icon "plus" "h-4 w-4"}} Booking baru
+    </a>
+  </div>
+
+  {{/* ---------------------------------------------------------------- FILTER
+
+    Plain links, not a <select> with JS: a filter that changes the URL is
+    shareable, survives the back button, and works with JavaScript off. They
+    scroll horizontally on a narrow screen rather than wrapping into four rows.
+  */}}
+  <nav aria-label="Saring status" class="-mx-4 mt-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+    <ul class="flex w-max gap-2 sm:w-auto sm:flex-wrap">
+      {{range .Data.Filters}}
+        <li>
+          <a href="{{.Href}}"
+             {{if .Selected}}aria-current="page"{{end}}
+             class="inline-flex whitespace-nowrap rounded-pill border px-3.5 py-1.5 text-sm font-medium transition
+                    {{if .Selected}}border-forest-700 bg-forest-700 text-paper{{else}}border-line bg-paper text-ink-soft hover:border-ink-faint hover:text-ink{{end}}">
+            {{.Label}}
+          </a>
+        </li>
+      {{end}}
+    </ul>
+  </nav>
+
+  {{/* ------------------------------------------------------------------ LIST */}}
+  {{if .Data.Rows}}
+    <ul class="mt-6 space-y-3">
+      {{range .Data.Rows}}
+        {{$b := .Booking}}
+        <li class="rounded-card border border-line bg-paper p-5 transition hover:border-ink-faint">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              {{/* The whole card is not a link: it holds a second action, and
+                   nesting an <a> inside an <a> is invalid and unnavigable by
+                   keyboard. The heading link is the one target. */}}
+              <h2 class="font-display text-lg font-bold">
+                <a href="{{.Href}}" class="transition hover:text-clay-700">{{$b.ServiceName}}</a>
+              </h2>
+              <p class="mt-1 text-sm text-ink-soft">
+                {{dateID $b.SlotDate}} · {{timeRange $b.SlotStartTime $b.SlotEndTime}}
+              </p>
+            </div>
+            {{template "badge" (statusBadge $b.Status)}}
+          </div>
+
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+            <div class="text-sm">
+              <p class="font-mono text-ink-soft">{{$b.BookingCode}}</p>
+              <p class="mt-0.5 font-display text-xl font-bold text-clay-600">{{rupiah $b.PriceAmount}}</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              {{if .CanPay}}
+                <a href="{{.PayHref}}" class="{{template "btn_primary"}}">
+                  {{icon "wallet" "h-4 w-4"}} Bayar sekarang
+                </a>
+              {{end}}
+              <a href="{{.Href}}" class="{{template "btn_ghost"}}">
+                Lihat detail {{icon "arrow-right" "h-4 w-4"}}
+              </a>
+            </div>
+          </div>
+        </li>
+      {{end}}
+    </ul>
+
+    {{template "pagination" .Data.Pager}}
+  {{else}}
+    <div class="mt-6">
+      {{template "empty" .Data.Empty}}
+    </div>
+  {{end}}
+</div>
+{{- end -}}

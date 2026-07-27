@@ -1,0 +1,52 @@
+{{define "booking_cancelled_subject"}}Booking {{.Booking.Code}} dibatalkan{{end}}
+
+{{define "booking_cancelled_html"}}
+{{template "email_open" .}}
+<h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:32px;font-weight:700;color:#1b2a22;">Booking Anda dibatalkan</h1>
+<p style="margin:0 0 20px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#56645b;">
+  Halo {{.Booking.Customer}}, booking berikut sudah dibatalkan dan jadwalnya dilepas.
+</p>
+
+{{template "email_booking_table" .}}
+
+{{if .Reason}}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-top:20px;background-color:#f7dcd8;border-radius:8px;">
+  <tr>
+    <td style="padding:14px 16px;font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:21px;color:#1b2a22;">
+      <strong style="color:#a8352a;">Alasan pembatalan:</strong> {{.Reason}}
+    </td>
+  </tr>
+</table>
+{{end}}
+
+{{if .Refundable}}
+<p style="margin:20px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#1b2a22;">
+  Booking ini sudah dibayar sebesar <strong>{{rupiah .Booking.Amount}}</strong>. Pengembalian dana diproses secara manual — balas email ini{{if .Site.WhatsApp}} atau hubungi kami lewat WhatsApp{{end}} dan kami akan mengurusnya.
+</p>
+{{else}}
+<p style="margin:20px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#56645b;">
+  Anda bisa memesan jadwal lain kapan saja.
+</p>
+{{end}}
+
+{{template "email_button" .}}
+{{template "email_close" .}}
+{{end}}
+
+{{define "booking_cancelled_text"}}Halo {{.Booking.Customer}},
+
+Booking berikut sudah dibatalkan dan jadwalnya dilepas.
+
+{{template "email_booking_text" .}}
+{{if .Reason}}
+Alasan pembatalan: {{.Reason}}
+{{end}}{{if .Refundable}}
+Booking ini sudah dibayar sebesar {{rupiah .Booking.Amount}}. Pengembalian dana
+diproses secara manual — balas email ini{{if .Site.WhatsApp}} atau hubungi kami lewat WhatsApp{{end}} dan
+kami akan mengurusnya.
+{{else}}
+Anda bisa memesan jadwal lain kapan saja.
+{{end}}
+Detail booking:
+{{.Booking.URL}}
+{{template "email_footer_text" .}}{{end}}

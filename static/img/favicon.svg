@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The wordmark tile: clay on deep forest, matching the header logo. -->
+  <rect width="32" height="32" rx="8" fill="#0e2419"/>
+  <rect x="4" y="4" width="24" height="24" rx="6" fill="#b4552f"/>
+  <path d="M9.5 11.5h13M16 11.5v11" stroke="#faf5ef" stroke-width="3.2" stroke-linecap="round"/>
+</svg>

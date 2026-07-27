@@ -1,0 +1,32 @@
+{{/*
+  Public error page — 404, 403, 405, 500. Data is app.errorCopy.
+
+  Copy comes from the Go side so every status has an intentional Indonesian
+  message and a way forward, rather than a bare code.
+*/}}
+{{- define "content" -}}
+<section class="mx-auto flex max-w-xl flex-col items-center px-4 py-24 text-center sm:px-6 lg:py-32">
+
+  <p class="font-display text-7xl font-extrabold text-clay-200 sm:text-8xl">{{.Data.Status}}</p>
+
+  <h1 class="mt-4 font-display text-3xl font-extrabold sm:text-4xl">{{.Data.Title}}</h1>
+  <p class="mt-3 text-ink-soft">{{.Data.Message}}</p>
+
+  <div class="mt-9 flex flex-wrap justify-center gap-3">
+    <a href="{{.Data.ActionHref}}" class="{{template "btn_primary"}} px-5 py-3 text-base">
+      {{.Data.ActionLabel}}
+    </a>
+    <a href="/layanan" class="{{template "btn_ghost"}} px-5 py-3 text-base">
+      Lihat layanan
+    </a>
+  </div>
+
+  {{if .Site.WhatsApp}}
+    <p class="mt-8 text-sm text-ink-soft">
+      Butuh bantuan?
+      <a href="{{waLink .Site.WhatsApp "Halo, saya menemukan kendala di situs."}}"
+         class="font-semibold text-clay-600 transition hover:text-clay-700">Hubungi kami lewat WhatsApp</a>.
+    </p>
+  {{end}}
+</section>
+{{- end -}}

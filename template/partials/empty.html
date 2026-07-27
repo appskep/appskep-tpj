@@ -1,0 +1,21 @@
+{{/*
+  Empty state. An empty screen is an invitation to act, so this always carries a
+  way forward rather than only reporting absence.
+
+  Takes {Icon, Title, Body, ActionLabel, ActionHref} — any handler-side struct
+  with those fields, or a map.
+*/}}
+{{- define "empty" -}}
+<div class="flex flex-col items-center rounded-card border border-dashed border-line bg-paper px-6 py-14 text-center">
+  <span class="grid h-12 w-12 place-items-center rounded-pill bg-paper-2 text-ink-faint">
+    {{icon (or .Icon "info") "h-5 w-5"}}
+  </span>
+  <p class="mt-4 font-display text-lg font-bold">{{.Title}}</p>
+  {{if .Body}}<p class="mt-1 max-w-sm text-sm text-ink-soft">{{.Body}}</p>{{end}}
+  {{if .ActionHref}}
+    <a href="{{.ActionHref}}" class="mt-5 rounded-field bg-clay-600 px-4 py-2.5 text-sm font-semibold text-paper transition hover:bg-clay-500">
+      {{.ActionLabel}}
+    </a>
+  {{end}}
+</div>
+{{- end -}}

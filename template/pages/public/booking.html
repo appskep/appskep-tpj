@@ -1,0 +1,353 @@
+{{/*
+  /booking — the whole flow on one URL.
+
+  Three steps, progressively revealed: layanan, jadwal, data. State travels in
+  the query string (?layanan=&tanggal=&slot=) on the way in and as hidden fields
+  on the way out, so the back button works and no server-side draft exists to go
+  stale.
+
+  The review is a POST to this same route WITHOUT konfirmasi=1 — it renders the
+  panel at the bottom and writes nothing. The confirm button re-posts every value
+  verbatim as hidden fields plus konfirmasi=1, so what commits is exactly what was
+  reviewed rather than whatever the form above happens to hold by then. Same
+  shape as the jadwal generator and the bulk delete.
+
+  Nothing here needs JavaScript. Turbo makes the date picker swap in place via
+  the booking_slots frame; without it, the same links are ordinary navigations
+  that render the same page.
+*/}}
+{{- define "content" -}}
+{{$svc := .Data.Service}}
+
+<div class="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:py-12">
+
+  <nav aria-label="Remah roti" class="text-sm text-ink-soft">
+    <a href="/" class="transition hover:text-ink">Beranda</a>
+    <span class="px-1.5" aria-hidden="true">/</span>
+    <a href="/layanan" class="transition hover:text-ink">Layanan</a>
+    <span class="px-1.5" aria-hidden="true">/</span>
+    <span class="font-medium text-ink">Booking</span>
+  </nav>
+
+  <h1 class="mt-6 font-display text-3xl font-extrabold tracking-tight sm:text-4xl">Booking terapi</h1>
+  <p class="mt-2 text-ink-soft">
+    Pilih layanan dan jadwalnya, lalu isi data. Slot ditahan
+    {{if .Data.ExpiryMins}}{{.Data.ExpiryMins}} menit{{else}}sementara{{end}}
+    sampai pembayaran selesai.
+  </p>
+
+  {{/* ------------------------------------------------------------- NOTICE */}}
+  {{with .Data.Notice}}
+    <div role="status" class="mt-6 flex items-start gap-3 rounded-card border border-warning/30 bg-warning-soft p-4">
+      <span class="grid h-9 w-9 shrink-0 place-items-center rounded-pill bg-paper text-warning">
+        {{icon "alert-triangle" "h-4 w-4"}}
+      </span>
+      <p class="min-w-0 text-sm font-medium">{{.}}</p>
+    </div>
+  {{end}}
+
+  {{/* ============================================== LANGKAH 1 — LAYANAN */}}
+  <section class="mt-8" aria-labelledby="langkah-layanan">
+    <div class="flex items-center gap-3">
+      <span class="grid h-7 w-7 shrink-0 place-items-center rounded-pill bg-clay-600 text-xs font-bold text-paper">1</span>
+      <h2 id="langkah-layanan" class="font-display text-lg font-bold">Pilih layanan</h2>
+    </div>
+
+    {{if $svc}}
+      {{/* Chosen: collapse to a summary that can be clicked back into. */}}
+      <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-paper p-4">
+        <div class="min-w-0">
+          <p class="font-semibold">{{$svc.Name}}</p>
+          <p class="mt-0.5 text-sm text-ink-soft">
+            {{rupiah $svc.Price}} · {{duration $svc.DurationMinutes}}
+          </p>
+        </div>
+        <a href="/booking" class="{{template "btn_ghost"}} shrink-0">Ubah</a>
+      </div>
+
+    {{else if .Data.Services}}
+      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        {{range .Data.Services}}
+          <a href="/booking?layanan={{.Slug}}"
+             class="group flex flex-col rounded-card border border-line bg-paper p-5 transition
+                    hover:border-clay-500 hover:shadow-card focus-visible:border-clay-500">
+            <p class="font-display text-lg font-bold transition group-hover:text-clay-700">{{.Name}}</p>
+            {{if .Description.Valid}}
+              <p class="mt-2 text-sm leading-relaxed text-ink-soft">{{truncate (nullstr .Description) 110}}</p>
+            {{end}}
+            <div class="mt-5 flex flex-wrap items-center justify-between gap-2">
+              <span class="font-display text-xl font-bold text-clay-600">{{rupiah .Price}}</span>
+              {{template "pill" (duration .DurationMinutes)}}
+            </div>
+          </a>
+        {{end}}
+      </div>
+    {{else}}
+      <div class="mt-4">{{template "empty" .Data.EmptyServices}}</div>
+    {{end}}
+  </section>
+
+  {{/* ============================================== LANGKAH 2 — JADWAL */}}
+  {{if ge .Data.Step 2}}
+    <section class="mt-10" aria-labelledby="langkah-jadwal">
+      <div class="flex items-center gap-3">
+        <span class="grid h-7 w-7 shrink-0 place-items-center rounded-pill bg-clay-600 text-xs font-bold text-paper">2</span>
+        <h2 id="langkah-jadwal" class="font-display text-lg font-bold">Pilih jadwal</h2>
+      </div>
+
+      {{if .Data.Dates}}
+        {{/* Horizontal date strip. Each link carries data-turbo-frame so Turbo
+             pulls only the slot list out of the response; the same href is a
+             plain navigation when Turbo is not running. */}}
+        <div class="mt-4 -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <ul class="flex w-max gap-2 pb-1">
+            {{range .Data.Dates}}
+              <li>
+                <a href="{{.Href}}" data-turbo-frame="booking_slots"
+                   {{if .Selected}}aria-current="date"{{end}}
+                   class="flex min-w-[6.5rem] flex-col rounded-card border px-4 py-3 text-center transition
+                          {{if .Selected}}border-clay-500 bg-clay-50 text-clay-700{{else}}border-line bg-paper hover:border-clay-500{{end}}">
+                  <span class="text-sm font-semibold">{{dateCompact .Date}}</span>
+                  <span class="mt-1 text-xs text-ink-soft">{{.Free}} slot</span>
+                </a>
+              </li>
+            {{end}}
+          </ul>
+        </div>
+
+        {{/* data-turbo-action="advance" so a date swap also updates the address
+             bar, which keeps the back button honest. */}}
+        <turbo-frame id="booking_slots" data-turbo-action="advance" class="block">
+          {{template "booking_slots" .}}
+        </turbo-frame>
+
+      {{else}}
+        <div class="mt-4">{{template "empty" .Data.EmptyDates}}</div>
+      {{end}}
+    </section>
+  {{end}}
+
+  {{/* ================================================ LANGKAH 3 — DATA */}}
+  {{if ge .Data.Step 3}}
+    {{$slot := .Data.Slot}}
+
+    <section class="mt-10" aria-labelledby="langkah-data">
+      <div class="flex items-center gap-3">
+        <span class="grid h-7 w-7 shrink-0 place-items-center rounded-pill bg-clay-600 text-xs font-bold text-paper">3</span>
+        <h2 id="langkah-data" class="font-display text-lg font-bold">Isi data</h2>
+      </div>
+
+      {{if .Data.AlreadyBooked}}
+        <div role="status" class="mt-4 flex items-start gap-3 rounded-card border border-warning/30 bg-warning-soft p-4">
+          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-pill bg-paper text-warning">
+            {{icon "info" "h-4 w-4"}}
+          </span>
+          <p class="min-w-0 text-sm">
+            Anda sudah punya booking aktif untuk jadwal ini. Satu jadwal hanya bisa dibooking sekali
+            per akun — cek <a href="/riwayat" class="font-semibold text-clay-700 underline">Riwayat</a>.
+          </p>
+        </div>
+      {{end}}
+
+      {{/*
+        data-turbo="false" is load-bearing, not a preference.
+
+        This POST answers with the review panel at 200. Turbo requires a form
+        submission to end in a redirect and silently DISCARDS a 200 HTML
+        response — "Form responses must redirect to another location" — so with
+        Turbo intercepting, pressing this button appeared to do nothing at all.
+        Measured in a real browser; curl could never have shown it, because curl
+        is the no-JS path that always worked.
+
+        The review cannot redirect: its state is the customer's name, phone and
+        address, and putting those in a URL is exactly what this flow avoids. So
+        Turbo stands aside for this one form and the browser posts it natively.
+        The confirm form below DOES redirect (303), so Turbo handles that one.
+      */}}
+      <form method="post" action="/booking" data-turbo="false" class="mt-4">
+        {{csrfField .CSRF}}
+        <input type="hidden" name="layanan" value="{{.Data.Form.Layanan}}">
+        <input type="hidden" name="tanggal" value="{{.Data.Form.Tanggal}}">
+        <input type="hidden" name="slot" value="{{.Data.Form.Slot}}">
+
+        <div class="rounded-card border border-line bg-paper p-6">
+          <div class="grid gap-5">
+            {{/* Nama */}}
+            <div>
+              <label for="nama" class="block text-sm font-semibold">Nama</label>
+              <input type="text" id="nama" name="nama" value="{{.Data.Form.Nama}}" required
+                     maxlength="150" autocomplete="name"
+                     class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                            {{if index .Data.Errors "nama"}}border-danger{{else}}border-line{{end}}">
+              {{with index .Data.Errors "nama"}}
+                <p class="mt-1 text-sm text-danger">{{.}}</p>
+              {{else}}
+                <p class="mt-1 text-xs text-ink-faint">Nama yang dipanggil saat sesi berlangsung.</p>
+              {{end}}
+            </div>
+
+            {{/* Telepon */}}
+            <div class="sm:max-w-sm">
+              <label for="telepon" class="block text-sm font-semibold">Nomor telepon / WhatsApp</label>
+              <input type="tel" id="telepon" name="telepon" value="{{.Data.Form.Telepon}}" required
+                     maxlength="30" autocomplete="tel" inputmode="tel"
+                     class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                            {{if index .Data.Errors "telepon"}}border-danger{{else}}border-line{{end}}">
+              {{with index .Data.Errors "telepon"}}
+                <p class="mt-1 text-sm text-danger">{{.}}</p>
+              {{else}}
+                <p class="mt-1 text-xs text-ink-faint">Dipakai kalau kami perlu menghubungi soal jadwal ini.</p>
+              {{end}}
+            </div>
+
+            {{/* Alamat */}}
+            <div>
+              <label for="alamat" class="block text-sm font-semibold">
+                Alamat <span class="font-normal text-ink-faint">(opsional)</span>
+              </label>
+              <textarea id="alamat" name="alamat" rows="2" maxlength="500" autocomplete="street-address"
+                        class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                               {{if index .Data.Errors "alamat"}}border-danger{{else}}border-line{{end}}">{{.Data.Form.Alamat}}</textarea>
+              {{with index .Data.Errors "alamat"}}
+                <p class="mt-1 text-sm text-danger">{{.}}</p>
+              {{end}}
+            </div>
+
+            {{/* Catatan */}}
+            <div>
+              <label for="catatan" class="block text-sm font-semibold">
+                Keluhan / catatan <span class="font-normal text-ink-faint">(opsional)</span>
+              </label>
+              <textarea id="catatan" name="catatan" rows="3" maxlength="500"
+                        class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                               {{if index .Data.Errors "catatan"}}border-danger{{else}}border-line{{end}}">{{.Data.Form.Catatan}}</textarea>
+              {{with index .Data.Errors "catatan"}}
+                <p class="mt-1 text-sm text-danger">{{.}}</p>
+              {{else}}
+                <p class="mt-1 text-xs text-ink-faint">Ceritakan bagian yang sakit atau hal yang perlu kami tahu.</p>
+              {{end}}
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-5 flex justify-end">
+          <button type="submit" class="{{template "btn_primary"}} w-full sm:w-auto">
+            Lihat ringkasan {{icon "arrow-right" "h-4 w-4"}}
+          </button>
+        </div>
+      </form>
+
+      {{/* ------------------------------------------------------- RINGKASAN */}}
+      {{if .Data.Review}}
+        <div class="mt-8 rounded-card border-2 border-clay-500 bg-paper p-6">
+          <h2 class="font-display text-xl font-bold">Periksa lagi</h2>
+          <p class="mt-1 text-sm text-ink-soft">
+            Setelah dikonfirmasi, slot ini ditahan atas nama Anda dan harus dibayar sebelum batas waktu.
+          </p>
+
+          <dl class="mt-5 divide-y divide-line border-y border-line text-sm">
+            <div class="flex justify-between gap-4 py-3">
+              <dt class="text-ink-soft">Layanan</dt>
+              <dd class="text-right font-semibold">{{$svc.Name}}</dd>
+            </div>
+            <div class="flex justify-between gap-4 py-3">
+              <dt class="text-ink-soft">Jadwal</dt>
+              <dd class="text-right font-semibold">
+                {{dateID $slot.SlotDate}}<br>
+                <span class="font-normal text-ink-soft">{{timeRange $slot.StartTime $slot.EndTime}}</span>
+              </dd>
+            </div>
+            <div class="flex justify-between gap-4 py-3">
+              <dt class="text-ink-soft">Durasi</dt>
+              <dd class="text-right font-semibold">{{duration $svc.DurationMinutes}}</dd>
+            </div>
+            <div class="flex justify-between gap-4 py-3">
+              <dt class="text-ink-soft">Nama</dt>
+              <dd class="text-right font-semibold">{{.Data.Form.Nama}}</dd>
+            </div>
+            <div class="flex justify-between gap-4 py-3">
+              <dt class="text-ink-soft">Telepon</dt>
+              <dd class="text-right font-semibold">{{.Data.Form.Telepon}}</dd>
+            </div>
+            {{with .Data.Form.Alamat}}
+              <div class="flex justify-between gap-4 py-3">
+                <dt class="shrink-0 text-ink-soft">Alamat</dt>
+                <dd class="text-right">{{.}}</dd>
+              </div>
+            {{end}}
+            {{with .Data.Form.Catatan}}
+              <div class="flex justify-between gap-4 py-3">
+                <dt class="shrink-0 text-ink-soft">Catatan</dt>
+                <dd class="text-right">{{.}}</dd>
+              </div>
+            {{end}}
+            <div class="flex items-baseline justify-between gap-4 py-4">
+              <dt class="font-semibold">Total</dt>
+              <dd class="font-display text-2xl font-bold text-clay-600">{{rupiah $svc.Price}}</dd>
+            </div>
+          </dl>
+
+          {{with .Data.Terms}}
+            <p class="mt-4 text-xs leading-relaxed text-ink-faint">{{.}}</p>
+          {{end}}
+
+          {{/* Every value re-posted verbatim, so the commit writes what was
+               reviewed rather than whatever the form above holds now. */}}
+          <form method="post" action="/booking" class="mt-6">
+            {{csrfField .CSRF}}
+            <input type="hidden" name="konfirmasi" value="1">
+            <input type="hidden" name="layanan" value="{{.Data.Form.Layanan}}">
+            <input type="hidden" name="tanggal" value="{{.Data.Form.Tanggal}}">
+            <input type="hidden" name="slot" value="{{.Data.Form.Slot}}">
+            <input type="hidden" name="nama" value="{{.Data.Form.Nama}}">
+            <input type="hidden" name="telepon" value="{{.Data.Form.Telepon}}">
+            <input type="hidden" name="alamat" value="{{.Data.Form.Alamat}}">
+            <input type="hidden" name="catatan" value="{{.Data.Form.Catatan}}">
+
+            <button type="submit" class="{{template "btn_primary"}} w-full">
+              {{icon "check" "h-4 w-4"}} Konfirmasi &amp; lanjut ke pembayaran
+            </button>
+          </form>
+        </div>
+      {{end}}
+    </section>
+  {{end}}
+</div>
+
+{{- end -}}
+
+
+{{/*
+  The slot list for one date. Takes the whole view envelope, because it is
+  rendered both inside the page and — when Turbo swaps a date — as the body of
+  the booking_slots frame.
+
+  Links inside a frame navigate that frame by default, so the slot links carry
+  data-turbo-frame="_top": choosing a slot has to reveal step 3, which lives
+  outside this frame.
+*/}}
+{{- define "booking_slots" -}}
+  {{if .Data.Date.IsZero}}
+    <p class="mt-4 text-sm text-ink-soft">Pilih tanggal di atas untuk melihat jam yang tersedia.</p>
+  {{else if .Data.Slots}}
+    <p class="mt-5 text-sm font-semibold">{{dateID .Data.Date}}</p>
+    <ul class="mt-3 grid gap-2 sm:grid-cols-2">
+      {{range .Data.Slots}}
+        <li>
+          <a href="{{.Href}}" data-turbo-frame="_top"
+             {{if .Selected}}aria-current="true"{{end}}
+             class="flex items-center justify-between gap-3 rounded-card border px-4 py-3 text-sm transition
+                    {{if .Selected}}border-clay-500 bg-clay-50{{else}}border-line bg-paper hover:border-clay-500{{end}}">
+            <span class="font-semibold">{{timeRange .Slot.StartTime .Slot.EndTime}}</span>
+            <span class="flex items-center gap-2 text-xs text-ink-soft">
+              {{if gt .Slot.Capacity 1}}<span>{{.Left}} tersisa</span>{{end}}
+              {{if .Selected}}{{icon "check-circle" "h-4 w-4 text-clay-600"}}{{end}}
+            </span>
+          </a>
+        </li>
+      {{end}}
+    </ul>
+  {{else}}
+    <div class="mt-4">{{template "empty" .Data.EmptySlots}}</div>
+  {{end}}
+{{- end -}}

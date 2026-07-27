@@ -1,0 +1,172 @@
+{{/*
+  Admin — daftar layanan.
+
+  The topbar already renders Page.Title as the h1, so this page starts at the
+  toolbar. Three templates live here:
+
+    content            the page
+    svc_toggles        one row's flag cell — shared by the table and the stream
+    svc_toggles_stream the turbo-stream reply to a toggle POST
+
+  svc_toggles is defined once and used by both, so the markup the page renders
+  and the markup that replaces it after a click cannot drift apart. Names are
+  prefixed svc_ because the partial namespace is shared across every page.
+*/}}
+{{- define "content" -}}
+
+<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  {{/* GET, so a search is a normal navigation with a shareable, bookmarkable
+       URL — and so pagination can carry the term in the same query string. */}}
+  <form method="get" action="/admin/layanan" class="flex w-full gap-2 sm:max-w-sm">
+    <div class="relative flex-1">
+      <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
+        {{icon "search" "h-4 w-4"}}
+      </span>
+      <input type="search" name="q" value="{{.Data.Search}}" placeholder="Cari layanan…"
+             class="w-full rounded-field border border-line bg-paper py-2.5 pl-9 pr-3 text-sm placeholder:text-ink-faint">
+    </div>
+    <button type="submit" class="{{template "btn_ghost"}}">Cari</button>
+  </form>
+
+  <a href="/admin/layanan/baru" class="{{template "btn_primary"}} shrink-0">
+    {{icon "plus" "h-4 w-4"}} Tambah layanan
+  </a>
+</div>
+
+{{if .Data.Services}}
+  <div class="mt-5 overflow-hidden rounded-card border border-line bg-paper shadow-card">
+    {{/* The table scrolls inside its own container rather than pushing the page
+         wide on a phone. */}}
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[54rem] text-sm">
+        <thead class="border-b border-line bg-paper-2 text-left text-xs uppercase tracking-wide text-ink-soft">
+          <tr>
+            <th scope="col" class="px-4 py-3 font-semibold">Layanan</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Harga</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Durasi</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Urutan</th>
+            <th scope="col" class="px-4 py-3 font-semibold">Status</th>
+            <th scope="col" class="px-4 py-3 text-right font-semibold">Aksi</th>
+          </tr>
+        </thead>
+
+        <tbody class="divide-y divide-line">
+          {{range .Data.Services}}
+            <tr class="align-middle">
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-3">
+                  <span class="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-field bg-paper-2 text-ink-faint">
+                    {{if .ImagePath.Valid}}
+                      <img src="/static/{{nullstr .ImagePath}}" alt=""
+                           width="44" height="44" loading="lazy" decoding="async"
+                           class="h-full w-full object-cover">
+                    {{else}}
+                      {{icon "image" "h-4 w-4"}}
+                    {{end}}
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block font-semibold">{{.Name}}</span>
+                    <span class="block text-xs text-ink-faint">/layanan/{{.Slug}}</span>
+                  </span>
+                </div>
+              </td>
+
+              <td class="whitespace-nowrap px-4 py-3 font-medium">{{rupiah .Price}}</td>
+              <td class="whitespace-nowrap px-4 py-3 text-ink-soft">{{duration .DurationMinutes}}</td>
+              <td class="whitespace-nowrap px-4 py-3 text-ink-soft">{{.SortOrder}}</td>
+
+              <td class="px-4 py-3">{{template "svc_toggles" .}}</td>
+
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-end gap-1">
+                  <a href="/layanan/{{.Slug}}" target="_blank" rel="noopener"
+                     class="grid h-9 w-9 place-items-center rounded-field text-ink-soft transition hover:bg-paper-2"
+                     title="Lihat di situs publik">
+                    <span class="sr-only">Lihat {{.Name}} di situs publik</span>
+                    {{icon "external-link" "h-4 w-4"}}
+                  </a>
+                  <a href="/admin/layanan/{{.ID}}/edit"
+                     class="grid h-9 w-9 place-items-center rounded-field text-ink-soft transition hover:bg-paper-2"
+                     title="Ubah">
+                    <span class="sr-only">Ubah {{.Name}}</span>
+                    {{icon "pencil" "h-4 w-4"}}
+                  </a>
+                  {{/* The trigger lives here because only the call site knows its
+                       placement; the dialog itself is the shared partial. */}}
+                  <button type="button" data-dialog="hapus-{{.ID}}"
+                          class="grid h-9 w-9 place-items-center rounded-field text-ink-soft transition hover:bg-danger-soft hover:text-danger"
+                          title="Hapus">
+                    <span class="sr-only">Hapus {{.Name}}</span>
+                    {{icon "trash-2" "h-4 w-4"}}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {{/* Dialogs sit outside the scrolling table so the backdrop covers the page
+       rather than the cell. */}}
+  {{range .Data.Dialogs}}{{template "confirm" .}}{{end}}
+
+  {{template "pagination" .Data.Pager}}
+
+  <p class="mt-4 text-xs text-ink-faint">{{.Data.Total}} layanan</p>
+{{else}}
+  <div class="mt-5">{{template "empty" .Data.Empty}}</div>
+{{end}}
+
+{{- end -}}
+
+
+{{/*
+  One row's flag cell. Takes a handler.serviceToggle — an sqlc.Service embedded
+  beside the CSRF token, because a define rebinds $ and cannot reach the page
+  envelope's token from in here.
+
+  Each button posts the value it wants rather than asking for a flip, so a
+  double-click or a resent request settles on the state of the last click instead
+  of inverting whatever it finds. Turbo submits these and swaps in the stream
+  reply; without JS the handler redirects back to the list instead.
+*/}}
+{{- define "svc_toggles" -}}
+<div id="svc-toggles-{{.ID}}" class="flex flex-wrap items-center gap-1.5">
+
+  <form method="post" action="/admin/layanan/{{.ID}}/aktif">
+    {{csrfField .CSRF}}
+    <input type="hidden" name="value" value="{{if .IsActive}}0{{else}}1{{end}}">
+    <button type="submit"
+            class="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-semibold transition
+                   {{if .IsActive}}bg-success-soft text-success hover:opacity-80{{else}}bg-paper-2 text-ink-faint hover:bg-line{{end}}"
+            title="{{if .IsActive}}Nonaktifkan layanan{{else}}Aktifkan layanan{{end}}">
+      {{if .IsActive}}{{icon "check" "h-3.5 w-3.5"}}Aktif{{else}}{{icon "ban" "h-3.5 w-3.5"}}Nonaktif{{end}}
+    </button>
+  </form>
+
+  <form method="post" action="/admin/layanan/{{.ID}}/segera">
+    {{csrfField .CSRF}}
+    <input type="hidden" name="value" value="{{if .IsComingSoon}}0{{else}}1{{end}}">
+    <button type="submit"
+            class="inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-semibold transition
+                   {{if .IsComingSoon}}bg-warning-soft text-warning hover:opacity-80{{else}}bg-paper-2 text-ink-faint hover:bg-line{{end}}"
+            title="{{if .IsComingSoon}}Buka pemesanan layanan ini{{else}}Tandai belum bisa dipesan{{end}}">
+      {{icon "clock" "h-3.5 w-3.5"}}
+      Segera hadir
+    </button>
+  </form>
+</div>
+{{- end -}}
+
+
+{{/*
+  The reply to a toggle POST. RenderStream executes against the whole view
+  envelope, hence the .Data hop to reach the service.
+*/}}
+{{- define "svc_toggles_stream" -}}
+<turbo-stream action="replace" target="svc-toggles-{{.Data.ID}}">
+  <template>{{template "svc_toggles" .Data}}</template>
+</turbo-stream>
+{{- end -}}

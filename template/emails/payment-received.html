@@ -1,0 +1,31 @@
+{{define "payment_received_subject"}}Pembayaran diterima — booking {{.Booking.Code}}{{end}}
+
+{{define "payment_received_html"}}
+{{template "email_open" .}}
+<h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:32px;font-weight:700;color:#1b2a22;">Pembayaran Anda sudah kami terima</h1>
+<p style="margin:0 0 20px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#56645b;">
+  Terima kasih, {{.Booking.Customer}}. Jadwal Anda sudah terkunci — tidak ada lagi yang perlu dilakukan sebelum hari kunjungan.
+</p>
+
+{{template "email_booking_table" .}}
+
+<p style="margin:20px 0 0;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#1b2a22;">
+  Datanglah beberapa menit lebih awal, dan sebutkan kode booking di atas saat tiba.
+</p>
+
+{{template "email_button" .}}
+{{template "email_close" .}}
+{{end}}
+
+{{define "payment_received_text"}}Halo {{.Booking.Customer}},
+
+Terima kasih, pembayaran Anda sudah kami terima. Jadwal Anda sudah terkunci —
+tidak ada lagi yang perlu dilakukan sebelum hari kunjungan.
+
+{{template "email_booking_text" .}}
+
+Datanglah beberapa menit lebih awal, dan sebutkan kode booking di atas saat tiba.
+
+Detail booking:
+{{.Booking.URL}}
+{{template "email_footer_text" .}}{{end}}
