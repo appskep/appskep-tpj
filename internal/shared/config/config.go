@@ -189,8 +189,11 @@ type MidtransConfig struct {
 	// offered whatever the account has active — which on a SHARED account is
 	// whatever another Appskep system turned on, so it is not the default.
 	//
-	// A single entry makes Snap skip its method picker and open that channel's
-	// page directly, which is why the default is exactly ["qris"].
+	// The default is QRIS plus the two e-wallet deeplinks — on a phone, opening
+	// GoPay or ShopeePay directly beats scanning a QR off the same screen. A
+	// SINGLE entry makes Snap skip its method picker and open that channel's page
+	// directly; that is still reachable, as a one-line env change, by naming one
+	// channel.
 	EnabledPayments []string
 	// Timeout bounds one call to the Midtrans API. It must stay well under
 	// SERVER_WRITE_TIMEOUT: a customer pressing "Bayar sekarang" waits on this
@@ -230,15 +233,22 @@ const midtransPaymentsAll = "all"
 
 // midtransPayments are the Snap channel names Midtrans accepts in
 // enabled_payments. The strings are written out rather than taken from the SDK
-// for two reasons: config imports nothing from the payment provider, the same
-// way Env carries the literal "midtrans.Production"; and the pinned SDK v1.3.8
-// predates "qris" and "other_qris", which Midtrans has accepted for years.
+// because config imports nothing from the payment provider, the same way Env
+// carries the literal "midtrans.Production" — and because the pinned SDK v1.3.8
+// has no constant for "other_qris", which Midtrans has accepted for years.
 //
 // An unknown value here is a Snap page that errors for every customer, so it
 // fails the boot instead.
+//
+// "qris" is deliberately ABSENT: it is a Core API payment_type, not a Snap
+// channel, and Snap drops an unrecognised name silently rather than rejecting
+// the transaction. Shipping it left every customer on "Metode pembayaran tidak
+// tersedia" with a valid token, a valid redirect and nothing in our logs. The
+// generic QRIS channel is "other_qris", which needs GoPay or ShopeePay QRIS
+// active on the merchant account.
 var midtransPayments = map[string]bool{
-	"qris": true, "other_qris": true,
-	"gopay": true, "shopeepay": true,
+	"other_qris": true,
+	"gopay":      true, "shopeepay": true,
 	"credit_card":   true,
 	"bank_transfer": true,
 	"bca_va":        true, "bni_va": true, "bri_va": true,
@@ -360,13 +370,13 @@ func Load() (*Config, error) {
 	cfg.DB.TZOffset = utcOffset(loc)
 
 	// Not in the struct literal above because getStringSlice has no fallback
-	// parameter. Unset means QRIS alone, which is also what makes Snap open the
-	// QR page directly instead of a method picker; "all" is the escape hatch back
-	// to the account's own list.
+	// parameter. Unset means QRIS plus the two e-wallet deeplinks; naming one
+	// channel is what makes Snap open that channel's page directly instead of a
+	// method picker; "all" is the escape hatch back to the account's own list.
 	cfg.Midtrans.EnabledPayments = getStringSlice("MIDTRANS_ENABLED_PAYMENTS")
 	switch {
 	case len(cfg.Midtrans.EnabledPayments) == 0:
-		cfg.Midtrans.EnabledPayments = []string{"qris"}
+		cfg.Midtrans.EnabledPayments = []string{"other_qris", "gopay", "shopeepay"}
 	case len(cfg.Midtrans.EnabledPayments) == 1 &&
 		cfg.Midtrans.EnabledPayments[0] == midtransPaymentsAll:
 		cfg.Midtrans.EnabledPayments = nil

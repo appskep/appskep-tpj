@@ -1036,15 +1036,26 @@ Departures from the task list, and the reasoning:
 - **Payment channels were scoped to QRIS on 2026-07-28, after the phase closed.** The Snap
   request set no `enabled_payments`, so the page offered every channel the *shared* merchant
   account has active — another Appskep system's configuration, reaching our customers.
-  `MIDTRANS_ENABLED_PAYMENTS` (default `qris`) now sends the list per transaction, the only
-  lever available given nothing account-wide may be changed. A single entry is deliberate
-  beyond the channel choice: **Snap skips its method picker when only one channel is enabled**,
-  so "Bayar sekarang" lands the customer on the QR and its countdown with nothing to click.
-  `all` sends no field and restores the account list — the escape hatch for a channel that
-  turns out not to be active. An unrecognised name fails the boot, because Midtrans would
-  otherwise reject every transaction with nothing wrong in our own logs. Building the request
-  moved into `Midtrans.snapRequest` so the body can be marshalled and asserted without a
-  network; before this, nothing tested the request at all.
+  `MIDTRANS_ENABLED_PAYMENTS` (default `qris` at the time) now sends the list per transaction,
+  the only lever available given nothing account-wide may be changed. A single entry was
+  deliberate beyond the channel choice: **Snap skips its method picker when only one channel
+  is enabled**, so "Bayar sekarang" lands the customer on the QR and its countdown with
+  nothing to click. `all` sends no field and restores the account list — the escape hatch for
+  a channel that turns out not to be active. An unrecognised name fails the boot, because
+  Midtrans would otherwise reject every transaction with nothing wrong in our own logs.
+  Building the request moved into `Midtrans.snapRequest` so the body can be marshalled and
+  asserted without a network; before this, nothing tested the request at all.
+- **Corrected and widened on 2026-07-30.** Two changes to the same setting. First, `qris` was
+  the wrong name: it is a Core API `payment_type`, not a Snap channel, and **Snap drops an
+  unrecognised name silently instead of rejecting the transaction** — the token, the redirect
+  and our logs were all clean while every customer read "Metode pembayaran tidak tersedia".
+  Snap's generic QRIS channel is `other_qris`, and plain `qris` is now refused at boot so the
+  mistake cannot be repeated. Second, GoPay and ShopeePay were added back: the default is
+  `other_qris,gopay,shopeepay`, because a deeplink into the wallet app beats scanning a QR off
+  the same screen on a phone. That returns Snap's method picker — the single-entry skip is now
+  an opt-in, reachable by naming one channel, not the shipped behaviour. QA.md's payment
+  checklist was rewritten to match: it asserts the three channels are listed, not that the
+  picker is absent.
 - **No schema change.** `0001_schema.sql` stayed frozen and no query file was edited — Phase 1
   wrote every query this phase needed, guarded and commented for it. The only generated-code
   change is the `raw_response` override above.

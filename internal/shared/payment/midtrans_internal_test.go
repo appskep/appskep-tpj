@@ -64,37 +64,46 @@ func TestSnapRequestEnabledPayments(t *testing.T) {
 		CustomerEmail: "ari@example.com",
 	}
 
-	t.Run("qris alone", func(t *testing.T) {
+	t.Run("other_qris alone", func(t *testing.T) {
 		// One channel is what makes Snap skip its method picker and open the QR
 		// page directly. Two would restore the picker, which is why the count
-		// matters as much as the value.
+		// matters as much as the value — and why this is an opt-in rather than the
+		// default, which carries the e-wallet deeplinks and so shows a picker.
+		//
+		// The value matters just as much: Snap's generic QRIS channel is
+		// "other_qris". Plain "qris" is a Core API payment_type, and Snap drops an
+		// unrecognised name instead of rejecting the transaction — the token and
+		// the redirect still come back, and the customer lands on "Metode
+		// pembayaran tidak tersedia". config rejects "qris" at boot for this
+		// reason; the assertion here is the wire half of the same guard.
 		m := NewMidtrans(config.MidtransConfig{
 			ServerKey:       "k",
 			Timeout:         time.Second,
-			EnabledPayments: []string{"qris"},
+			EnabledPayments: []string{"other_qris"},
 		})
 
 		body, err := json.Marshal(m.snapRequest(order))
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
 		}
-		if got, want := string(body), `"enabled_payments":["qris"]`; !strings.Contains(got, want) {
+		if got, want := string(body), `"enabled_payments":["other_qris"]`; !strings.Contains(got, want) {
 			t.Errorf("snap request = %s\nwant it to contain %s", got, want)
 		}
 	})
 
 	t.Run("several channels keep their order", func(t *testing.T) {
+		// This list is the shipped default. Order is the order Snap lists them in.
 		m := NewMidtrans(config.MidtransConfig{
 			ServerKey:       "k",
 			Timeout:         time.Second,
-			EnabledPayments: []string{"qris", "gopay", "shopeepay"},
+			EnabledPayments: []string{"other_qris", "gopay", "shopeepay"},
 		})
 
 		body, err := json.Marshal(m.snapRequest(order))
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
 		}
-		want := `"enabled_payments":["qris","gopay","shopeepay"]`
+		want := `"enabled_payments":["other_qris","gopay","shopeepay"]`
 		if got := string(body); !strings.Contains(got, want) {
 			t.Errorf("snap request = %s\nwant it to contain %s", got, want)
 		}

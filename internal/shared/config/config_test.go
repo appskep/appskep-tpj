@@ -104,21 +104,32 @@ func TestLoadDefaults(t *testing.T) {
 }
 
 // TestLoadResolvesEnabledPayments covers the one setting whose default is not
-// "whatever the upstream does". Unset must mean QRIS alone — a single channel is
-// what makes Snap skip its method picker — because the fallback of sending
-// nothing offers whatever ANOTHER Appskep system turned on for the shared
-// merchant account.
+// "whatever the upstream does". Unset must mean QRIS plus the two e-wallet
+// deeplinks — never the empty list, because sending no enabled_payments at all
+// offers whatever ANOTHER Appskep system turned on for the shared merchant
+// account.
+//
+// The "explicit single" case is the one that must not rot: naming one channel is
+// what makes Snap skip its method picker, and it is the supported way back to a
+// QRIS-only checkout now that the default carries three.
+//
+// The spelling is "other_qris", Snap's name for the generic QRIS channel. See
+// the "core api payment_type is not a snap channel" case in
+// TestLoadRejectsInvalidValues for why the wrong one cost a day.
 func TestLoadResolvesEnabledPayments(t *testing.T) {
 	tests := []struct {
 		name  string
 		value string
 		want  []string
 	}{
-		{name: "unset", value: "", want: []string{"qris"}},
-		{name: "explicit single", value: "qris", want: []string{"qris"}},
 		{
-			name: "wallet deeplinks alongside qris", value: "qris, gopay ,shopeepay",
-			want: []string{"qris", "gopay", "shopeepay"},
+			name: "unset", value: "",
+			want: []string{"other_qris", "gopay", "shopeepay"},
+		},
+		{name: "explicit single", value: "other_qris", want: []string{"other_qris"}},
+		{
+			name: "whitespace around each channel", value: "other_qris, gopay ,shopeepay",
+			want: []string{"other_qris", "gopay", "shopeepay"},
 		},
 		// The escape hatch: send no enabled_payments at all, so a channel that is
 		// not active on the shared account can be worked around from .env.
@@ -261,15 +272,25 @@ func TestLoadValidation(t *testing.T) {
 			want: "MIDTRANS_PREFIX",
 		},
 		{
-			// A channel Midtrans does not recognise is rejected for every
-			// transaction, so "Bayar sekarang" would fail for every customer with
-			// nothing wrong in our own logs.
+			// A channel Midtrans does not recognise is not rejected by Snap — it is
+			// dropped. The transaction is created, the token and redirect come back
+			// clean, and the customer reaches a page offering nothing at all. Boot is
+			// the only place this can be caught.
 			name: "unknown payment channel", key: "MIDTRANS_ENABLED_PAYMENTS", value: "qriss",
 			want: "MIDTRANS_ENABLED_PAYMENTS",
 		},
 		{
+			// The regression. "qris" is a Core API payment_type and looks entirely
+			// plausible in a Snap request; it shipped, and every customer got "Metode
+			// pembayaran tidak tersedia" while the logs stayed silent. Snap's generic
+			// QRIS channel is "other_qris".
+			name: "core api payment_type is not a snap channel",
+			key:  "MIDTRANS_ENABLED_PAYMENTS", value: "qris",
+			want: "MIDTRANS_ENABLED_PAYMENTS",
+		},
+		{
 			name: "one bad channel among good ones", key: "MIDTRANS_ENABLED_PAYMENTS",
-			value: "qris,gopay,paypal", want: "MIDTRANS_ENABLED_PAYMENTS",
+			value: "other_qris,gopay,paypal", want: "MIDTRANS_ENABLED_PAYMENTS",
 		},
 		{
 			// A malformed list must be a failed boot, not a silently empty one: the

@@ -62,8 +62,8 @@ func NewMidtrans(cfg config.MidtransConfig) *Midtrans {
 		env = midtrans.Production
 	}
 	// SnapPaymentType is a bare string type, so a channel the pinned SDK has no
-	// constant for — "qris", which predates v1.3.8 by years — converts like any
-	// other. config validated the names; this only changes their type.
+	// constant for — "other_qris", which predates v1.3.8 by years — converts
+	// like any other. config validated the names; this only changes their type.
 	var payments []snap.SnapPaymentType
 	for _, p := range cfg.EnabledPayments {
 		payments = append(payments, snap.SnapPaymentType(p))
@@ -155,9 +155,10 @@ func (m *Midtrans) snapRequest(o Order) *snap.Request {
 	}
 	if len(m.enabledPayments) > 0 {
 		// Scoping the channels is per transaction, never account-wide, because
-		// the merchant account is shared. A single entry also makes Snap skip its
-		// method picker and open that channel's page directly — which is the
-		// whole point of the QRIS-only default.
+		// the merchant account is shared. A single-entry list additionally makes
+		// Snap skip its method picker and open that channel's page directly,
+		// which is why a QRIS-only deployment stays a one-line env change even
+		// though the default now carries the e-wallet deeplinks too.
 		req.EnabledPayments = m.enabledPayments
 	}
 

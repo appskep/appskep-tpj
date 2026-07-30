@@ -112,12 +112,20 @@ Sandbox only. `MIDTRANS_ENV` must not be `midtrans.Production`.
       a Turbo `fetch()` once, which fails cross-origin on CORS and `connect-src`.
       **Repeat in Firefox** — `form-action` is checked on every redirect hop there
       and not in Chrome, so Chrome alone cannot clear this step.
-- [ ] **The Snap page opens straight on the QRIS screen — no method picker.**
-      `MIDTRANS_ENABLED_PAYMENTS=qris` is a single channel, and Snap skips its
-      list when there is only one. A picker here means the field never reached
-      Midtrans; a channel that errors means QRIS is not active on the shared
-      merchant account, which `MIDTRANS_ENABLED_PAYMENTS=all` will confirm in
-      seconds. curl sees a 303 either way and can clear neither.
+- [ ] **The Snap page lists QRIS, GoPay and ShopeePay — and nothing else.**
+      That is `MIDTRANS_ENABLED_PAYMENTS=other_qris,gopay,shopeepay`, sent per
+      transaction. A **fourth** channel means the field never reached Midtrans and
+      the page is showing the shared account's own list. A **missing** one means
+      that channel is not active on the shared merchant account — confirm with
+      `MIDTRANS_ENABLED_PAYMENTS=all`, then drop it from the list rather than
+      shipping a picker entry that fails. An **empty** page is the `qris` /
+      `other_qris` mistake: Snap drops a name it does not know without complaining.
+      curl sees a 303 in every one of these cases and can clear none of them.
+- [ ] **One channel still skips the picker.** Set
+      `MIDTRANS_ENABLED_PAYMENTS=other_qris`, restart, and "Bayar sekarang" must
+      land straight on the QR and its countdown with nothing to click. This is the
+      supported route back to a QRIS-only checkout; put the three-channel value
+      back afterwards.
 - [ ] Complete the sandbox payment → the finish callback lands on
       `/booking/{code}/konfirmasi`.
 - [ ] The status reaches `paid`. On a machine Midtrans cannot call back into, use
