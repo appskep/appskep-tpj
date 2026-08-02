@@ -57,11 +57,11 @@
   --color-info-soft: #d8e8ef;
 
   /* --- Type ------------------------------------------------------------ */
-  /* Display: a low-contrast irregular grotesque. Chosen over the obvious
-   * high-contrast serif, which reads as editorial rather than physical.
+  /* Display: Onest — a low-contrast geometric sans with open apertures and
+   * even colour, so it stays calm at hero size where a grotesque gets loud.
    * Body: Plus Jakarta Sans, commissioned for Jakarta's city identity — the
    * typeface of this app's own timezone, and it sets Indonesian well small. */
-  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Onest", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
 
   /* --- Radius ---------------------------------------------------------- */
@@ -80,11 +80,11 @@
  * font-display: swap keeps first paint fast; the fallback metrics are close
  * enough that the swap is not jarring. */
 @font-face {
-  font-family: "Bricolage Grotesque";
+  font-family: "Onest";
   font-style: normal;
-  font-weight: 400 800;
+  font-weight: 400 900;
   font-display: swap;
-  src: url("/static/fonts/bricolage-grotesque-var.woff2") format("woff2");
+  src: url("/static/fonts/onest-var.woff2") format("woff2");
 }
 
 @font-face {
@@ -109,8 +109,8 @@
     text-rendering: optimizeLegibility;
   }
 
-  /* The display face is set tight: it has enough personality that default
-   * tracking makes it look loose at large sizes. */
+  /* The display face is set tight: its default tracking is drawn for text
+   * sizes and reads loose once a heading is large. */
   h1,
   h2,
   h3 {

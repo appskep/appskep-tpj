@@ -307,7 +307,7 @@ right assumptions:
 - **Design direction, since the spec carries no branding at all.** Warm clay + deep green,
   with deep green as the *structural* colour (public header, footer, admin sidebar) and clay
   reserved for actions — the inverse of the cream-page-with-a-terracotta-accent arrangement
-  that every wellness site already uses. Display face Bricolage Grotesque, body face Plus
+  that every wellness site already uses. Display face Onest, body face Plus
   Jakarta Sans (commissioned for Jakarta's city identity). The hero states a diagnosis —
   *"Umurmu 25. Punggungmu 65."* — over a list of the three aches, each linking to the layanan
   that treats it, beside a figure whose spine is the one clay line on the page.

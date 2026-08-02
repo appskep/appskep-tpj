@@ -6,8 +6,8 @@
 # no CDN at runtime. The files are committed, so this script only runs when a
 # family or subset changes.
 #
-#   Bricolage Grotesque — display face (hero, section heads)
-#   Plus Jakarta Sans   — body and UI face
+#   Onest             — display face (hero, section heads)
+#   Plus Jakarta Sans — body and UI face
 #
 # Only the `latin` subset is kept. Indonesian is written in plain Latin script
 # with no diacritics beyond what latin covers, so latin-ext would be dead weight.
@@ -53,20 +53,20 @@ fetch_latin() {
 
 echo "downloading fonts into $DEST"
 
-# Variable axes are pinned to the ranges the design actually uses: weight only
-# for the body face, weight + optical size for the display face.
+# Both families expose weight only, pinned to the ranges the design actually
+# uses. The display face goes to 900 because the logo mark is font-black.
 fetch_latin \
-  'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap' \
-  'bricolage-grotesque-var'
+  'https://fonts.googleapis.com/css2?family=Onest:wght@400..900&display=swap' \
+  'onest-var'
 
 fetch_latin \
   'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400..700&display=swap' \
   'plus-jakarta-sans-var'
 
 cat >"$DEST/LICENSE.txt" <<'EOF'
-Bricolage Grotesque — SIL Open Font License 1.1
-  Copyright (c) 2023 The Bricolage Project Authors
-  https://github.com/ateliertriay/bricolage
+Onest — SIL Open Font License 1.1
+  Copyright (c) 2021 The Onest Project Authors
+  https://github.com/simecek1024/Onest
 
 Plus Jakarta Sans — SIL Open Font License 1.1
   Copyright (c) 2020 Tokotype

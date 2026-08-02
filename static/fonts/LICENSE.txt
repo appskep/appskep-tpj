@@ -1,6 +1,6 @@
-Bricolage Grotesque — SIL Open Font License 1.1
-  Copyright (c) 2023 The Bricolage Project Authors
-  https://github.com/ateliertriay/bricolage
+Onest — SIL Open Font License 1.1
+  Copyright (c) 2021 The Onest Project Authors
+  https://github.com/simecek1024/Onest
 
 Plus Jakarta Sans — SIL Open Font License 1.1
   Copyright (c) 2020 Tokotype
