@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -227,6 +228,13 @@ func TestATamperedCookieIsAnonymousNotAnError(t *testing.T) {
 // TestADeactivatedUserLosesAccessImmediately. LoadUser runs on every request
 // rather than caching the row in the session, because role and is_active are
 // precisely the two things an admin changes expecting an immediate effect.
+//
+// The refusal lands on "/" carrying a message rather than bouncing to SSO. Two
+// reasons, and the test asserts both: SSO is a loop, because logging in again
+// changes nothing about is_active; and a silent sign-out is indistinguishable
+// from never having logged in, which sends the user round that loop forever.
+// UpsertUserFromSSO deliberately leaves is_active alone on its ON DUPLICATE KEY
+// branch, so without the message this is a permanent, unexplained lockout.
 func TestADeactivatedUserLosesAccessImmediately(t *testing.T) {
 	env := testsupport.New(t)
 
@@ -243,9 +251,55 @@ func TestADeactivatedUserLosesAccessImmediately(t *testing.T) {
 	if h.ran {
 		t.Error("a deactivated user still reached the handler on the very next request")
 	}
-	if rec.Code != http.StatusFound {
-		t.Errorf("status = %d, want a redirect", rec.Code)
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("status = %d, want 303", rec.Code)
 	}
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Errorf("Location = %q, want %q — SSO would be a redirect loop", got, "/")
+	}
+
+	sess := sessionFrom(t, env, rec)
+	if sess.Token != "" {
+		t.Error("the session still carries a token after the user was deactivated")
+	}
+	if len(sess.Flash) == 0 {
+		t.Error("the user was signed out with no explanation")
+	}
+}
+
+// sessionFrom decodes the session the response wrote.
+//
+// The payload half of the cookie is plain base64url JSON — it is signed, not
+// encrypted, because it holds a JWT the bearer already has. So a test can read
+// it without the key, and asserting on it is how "was the user told why" becomes
+// a check rather than a thing someone has to open a browser to see.
+func sessionFrom(t *testing.T, env *testsupport.Env, rec *httptest.ResponseRecorder) auth.Session {
+	t.Helper()
+
+	var raw string
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == env.Cfg.Session.Name {
+			raw = c.Value
+		}
+	}
+	if raw == "" {
+		t.Fatal("no session cookie was written")
+	}
+
+	payload, _, found := strings.Cut(raw, ".")
+	if !found {
+		t.Fatalf("session cookie is not payload.signature: %q", raw)
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(payload)
+	if err != nil {
+		t.Fatalf("decoding session payload: %v", err)
+	}
+
+	var s auth.Session
+	if err := json.Unmarshal(decoded, &s); err != nil {
+		t.Fatalf("unmarshalling session payload: %v", err)
+	}
+	return s
 }
 
 // TestADemotedAdminLosesAdminImmediately, same reason.

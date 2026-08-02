@@ -97,19 +97,33 @@ func (d *Deps) authenticate(next http.Handler, mode denyMode) http.Handler {
 
 		// 3. The local mirror. Read every request so a demotion or deactivation
 		//    takes effect on the next click.
+		//
+		// Both failures here end the session, so both say why. Clearing and falling
+		// through to deny renders an ordinary signed-out page under OptionalAuth,
+		// which is indistinguishable from never having logged in — the visitor
+		// re-runs the SSO round trip forever and the only evidence is a log line.
+		// For a deactivated user that silence is permanent: UpsertUserFromSSO
+		// deliberately leaves is_active alone on its ON DUPLICATE KEY branch, so
+		// every future login re-lands on this same branch.
+		//
+		// SaveFlashAndRedirect rather than Clear-then-Save: two Set-Cookie headers
+		// for one name is order-dependent, and this helper replaces the session in a
+		// single write. It is documented for exactly this — a request that is ending
+		// a session. The destination is "/" and never SSO, for the reason deny
+		// already applies to a non-admin: logging in again changes nothing.
 		user, err := d.Auth.LoadUser(r.Context(), claims.UserID)
 		if err != nil {
 			d.Log.WarnContext(r.Context(), "auth: loading local user",
 				slog.Uint64("appskep_user_id", claims.UserID), slog.Any("error", err))
-			d.Session.Clear(w)
-			d.deny(w, r, next, mode, nil, auth.Session{})
+			d.SaveFlashAndRedirect(w, r, "/",
+				model.FlashError("Sesi Anda berakhir. Silakan masuk lagi."))
 			return
 		}
 		if !user.IsActive {
 			d.Log.InfoContext(r.Context(), "auth: refusing deactivated user",
 				slog.Int64("user_id", user.ID))
-			d.Session.Clear(w)
-			d.deny(w, r, next, mode, nil, auth.Session{})
+			d.SaveFlashAndRedirect(w, r, "/",
+				model.FlashError("Akun Anda dinonaktifkan. Hubungi admin TPJ."))
 			return
 		}
 

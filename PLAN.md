@@ -22,7 +22,7 @@ Sistem booking & pembayaran online: **Go monolith + chi + sqlc + MariaDB + Go ht
 | 0 | Bootstrap & scaffolding | DONE | 2026-07-26. `make dev` + `/api/health` verified. `make sqlc` blocked until Phase 1 writes the schema. `AUTH_SECRET` in `.env` is unverified against dev-auth — see **Q2** |
 | 1 | Database schema & sqlc | DONE | 2026-07-26. 8 tables, 7 query files, `repository.Store`. Generated columns accepted by sqlc natively — no fallback needed. See **Phase 1 notes** below |
 | 2 | Frontend pipeline (Tailwind, Turbo, icons, layouts) | DONE | 2026-07-26. Tailwind v4 standalone (no Node), self-hosted fonts + icon sprite, `view` renderer, both layouts, error pages. Landing page pulled forward from Phase 6. See **Phase 2 notes** below |
-| 3 | Authentication (Appskep SSO redirect flow) | DONE | 2026-07-26. Signed-cookie session (token only), `OptionalAuth`/`RequireAuth`/`RequireAdmin`, `/login` + `/logout`. The five other SSO redirect pages deferred — Appskep paths still undocumented. See **Phase 3 notes** below |
+| 3 | Authentication (Appskep SSO redirect flow) | DONE | 2026-07-26. Signed-cookie session (token only), `OptionalAuth`/`RequireAuth`/`RequireAdmin`, `/login` + `/logout`. The five other SSO redirect pages deferred — Appskep paths still undocumented. One defect found on 2026-08-02 (a deactivated or unmirrored user was signed out **silently**, indistinguishable from never having logged in, and — since `UpsertUserFromSSO` never resets `is_active` — permanently). See **Phase 3 notes** below |
 | 4 | Admin — Layanan (services) | DONE | 2026-07-26. Full CRUD, search, pagination, image upload, Turbo Stream toggles. Four codebase conventions established: validation errors, turbo partials, form parsing, uploads. See **Phase 4 notes** below |
 | 5 | Admin — Penjadwalan (schedule slots + generator) | DONE | 2026-07-27. Calendar + list views, single-slot CRUD, Turbo Stream toggle, generator with preview, bulk range actions. Booked slots are edit-locked. See **Phase 5 notes** below. **M2 complete** |
 | 6 | Public — Landing & Layanan | DONE | 2026-07-27. `/layanan` + `/layanan/{slug}` with a read-only jadwal-terdekat preview, ENV-aware `robots.txt`, generated `sitemap.xml`, canonical + OG pass. See **Phase 6 notes** below. **M3 complete** |
@@ -415,6 +415,17 @@ The spec lists login/register/forgot/reset/verify/resend pages. Under SSO these 
   stamps `last_login_at` and applies the `ADMIN_USER_IDS` bootstrap — runs only on the
   callback, inside one transaction, and only ever *promotes*, so a Phase 10 demotion
   survives the next login.
+- **Both `LoadUser` failure branches say why (2026-08-02).** They ended the session and fell
+  through to `deny`, which under `OptionalAuth` renders an ordinary signed-out page — a
+  visitor cannot tell that from never having logged in, so they re-run the SSO round trip
+  forever and the only evidence is one log line. For a deactivated user it was worse than
+  undiagnosable, it was permanent: `UpsertUserFromSSO` deliberately leaves `is_active` alone
+  on its `ON DUPLICATE KEY` branch, so every future login re-lands on the same branch. Both
+  now end through `SaveFlashAndRedirect` to `/` with an Indonesian message — one write, not
+  `Clear` then `Save`, because two `Set-Cookie` headers for one name are order-dependent —
+  and never to SSO, which is a loop for the same reason a non-admin gets a 403 instead.
+  Reported as "only a user listed in `ADMIN_USER_IDS` can log in", which the allowlist cannot
+  cause: `IsBootstrapAdmin` has one caller and it only ever calls `SetUserRole`.
 - **`expired_at`'s wire format is still unconfirmed.** authentication.md never states it,
   and dev-auth was not reachable with a real session during this phase. `claimTime` accepts
   a unix number (seconds, or millis above 1e12) or an RFC3339/`2006-01-02 15:04:05` string,
