@@ -63,7 +63,7 @@ func TestStartBuildsTheOrder(t *testing.T) {
 
 	// Both URLs come from APP_URL, never from a request header — the same reason
 	// client_base_url does not.
-	if order.NotificationURL != "http://localhost:8080/api/webhook/midtrans" {
+	if order.NotificationURL != "http://localhost:8080/midtrans/notification" {
 		t.Errorf("notification URL = %q", order.NotificationURL)
 	}
 	if !strings.HasPrefix(order.FinishURL, "http://localhost:8080/booking/") {

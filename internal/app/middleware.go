@@ -52,7 +52,10 @@ func (d *Deps) Recoverer(next http.Handler) http.Handler {
 				return
 			}
 
-			if strings.HasPrefix(r.URL.Path, "/api") {
+			// Both JSON mounts: /api and the Midtrans webhook at /midtrans. The
+			// same pair is listed in middleware.SecureHeaders and the two must agree
+			// — shared/middleware cannot import this package to share a constant.
+			if strings.HasPrefix(r.URL.Path, "/api") || strings.HasPrefix(r.URL.Path, "/midtrans") {
 				util.JSON(ww, http.StatusInternalServerError,
 					map[string]string{"error": "internal server error"})
 				return

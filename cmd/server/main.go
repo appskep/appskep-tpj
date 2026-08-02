@@ -260,6 +260,10 @@ func newRouter(d *app.Deps) http.Handler {
 	r.Use(chimw.Timeout(d.Cfg.Server.WriteTimeout))
 
 	r.Mount("/api", api.Routes(d))
+	// The Midtrans webhook, on the root rather than inside public.Routes: that
+	// router applies OptionalAuth and d.CSRF, and the webhook must have neither.
+	// chi matches this literal segment ahead of the "/" mount below.
+	r.Mount("/midtrans", api.WebhookRoutes(d))
 	r.Mount("/admin", admin.Routes(d))
 	r.Mount("/", public.Routes(d))
 

@@ -335,7 +335,7 @@ func TestHTTPClientRequestShape(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	notify := "https://tpj.example/api/webhook/midtrans"
+	notify := "https://tpj.example/midtrans/notification"
 	key := "SB-Mid-server-secret"
 
 	var out struct {

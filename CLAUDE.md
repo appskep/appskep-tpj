@@ -28,6 +28,7 @@ before starting work, and tick a task the moment it is executed and verified.
 | `make assets` | Re-vendor the icon sprite, fonts and Turbo — only when a version or the icon list changes |
 
 Server listens on `SERVER_PORT` (default 8080). Health check: `GET /api/health`.
+Payment webhook: `POST /midtrans/notification`.
 
 ## Layout
 
@@ -47,7 +48,10 @@ static/{css,js,img,fonts,uploads}/
 scripts/build-{icons,fonts,js}.sh  re-vendor committed assets (make assets)
 ```
 
-Route mounts: `/` → public, `/admin` → admin, `/api` → internal JSON.
+Route mounts: `/` → public, `/admin` → admin, `/api` → internal JSON,
+`/midtrans` → the payment webhook (also `internal/app/api`, but ungated — see Payments).
+The two JSON mounts are named by prefix in **both** `Deps.Recoverer` and
+`middleware.SecureHeaders`, and those lists must agree.
 
 ## Rendering
 
@@ -292,7 +296,11 @@ never by a Snap token response or a client-side callback. See
   is attached per transaction via `X-Append-Notification`; the dashboard's notification URL
   and its finish/unfinish/error redirects belong to another Appskep system. Only
   `callbacks.finish`, a per-transaction field, is set.
-- **`POST /api/webhook/midtrans` is public, ungated and must stay exempt from CSRF.** The
+- **`POST /midtrans/notification` is public, ungated and must stay exempt from CSRF.** It is
+  built by `api.WebhookRoutes` and mounted on the **root** router beside the crawler
+  endpoints, not inside `public.Routes`, which applies `OptionalAuth` and `d.CSRF` — a
+  webhook may have neither. (`api.Routes` at `/api` keeps only the health check; the two
+  routers exist separately only because they hang off different paths.) The
   SHA512 signature over `order_id + status_code + gross_amount + MIDTRANS_SERVER_KEY` — with
   `gross_amount` used *exactly* as received — is the whole authentication. Its status codes
   are chosen for what Midtrans does with them: 200 for anything we will never accept (foreign

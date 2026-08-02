@@ -254,7 +254,7 @@ func (p *Payment) Start(
 // It is attached per transaction (X-Append-Notification) rather than configured
 // on the account, because the account-wide setting belongs to another Appskep
 // system and changing it would stop their payments being confirmed.
-func (p *Payment) WebhookURL() string { return p.appURL + "/api/webhook/midtrans" }
+func (p *Payment) WebhookURL() string { return p.appURL + "/midtrans/notification" }
 
 // LatestForBooking returns the newest payment attempt, for the payment page.
 // A booking with no attempt yet is not an error.

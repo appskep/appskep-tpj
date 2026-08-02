@@ -20,20 +20,20 @@ import (
 //	401 — only a bad signature on one of OUR orders
 //	500 — only our own failure, because that is what makes it send again
 //
-// These go through api.Routes rather than the handler, so the absence of CSRF on
-// that router is part of what is checked.
+// These go through api.WebhookRoutes rather than the handler, so the absence of
+// CSRF on that router is part of what is checked.
 
 func webhook(t *testing.T, env *testsupport.Env, body []byte, headers map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	r := httptest.NewRequest(http.MethodPost, "/webhook/midtrans", bytes.NewReader(body))
+	r := httptest.NewRequest(http.MethodPost, "/notification", bytes.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	for k, v := range headers {
 		r.Header.Set(k, v)
 	}
 
 	rec := httptest.NewRecorder()
-	api.Routes(env.Deps).ServeHTTP(rec, r)
+	api.WebhookRoutes(env.Deps).ServeHTTP(rec, r)
 	return rec
 }
 
@@ -138,7 +138,7 @@ func TestWebhookNeedsNoCSRFToken(t *testing.T) {
 	}
 }
 
-// TestWebhookAnswersJSON: the /api router's failures are JSON, not the styled
+// TestWebhookAnswersJSON: the webhook router's failures are JSON, not the styled
 // HTML error page.
 func TestWebhookAnswersJSON(t *testing.T) {
 	env := testsupport.New(t)
@@ -176,11 +176,26 @@ func TestAPINotFoundAndMethodNotAllowed(t *testing.T) {
 
 	t.Run("wrong method on the webhook", func(t *testing.T) {
 		rec := httptest.NewRecorder()
-		api.Routes(env.Deps).ServeHTTP(rec,
-			httptest.NewRequest(http.MethodGet, "/webhook/midtrans", nil))
+		api.WebhookRoutes(env.Deps).ServeHTTP(rec,
+			httptest.NewRequest(http.MethodGet, "/notification", nil))
 
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Errorf("status = %d, want 405", rec.Code)
+		}
+		if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+			t.Errorf("Content-Type = %q, want JSON — the webhook router never "+
+				"renders the HTML error page either", ct)
+		}
+	})
+
+	t.Run("the old /api path is gone", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		api.Routes(env.Deps).ServeHTTP(rec,
+			httptest.NewRequest(http.MethodPost, "/webhook/midtrans", nil))
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want 404 — the webhook moved to "+
+				"/midtrans/notification and the old path was not kept", rec.Code)
 		}
 	})
 }

@@ -91,8 +91,10 @@ func SecureHeaders(production bool) func(http.Handler) http.Handler {
 
 			// The API answers JSON to a program, and a policy about what a document
 			// may load says nothing about that. Static files get their own, tighter
-			// policy in StaticHandler.
-			if !strings.HasPrefix(r.URL.Path, "/api") {
+			// policy in StaticHandler. /midtrans is the payment webhook, JSON for
+			// the same reason; app.Deps.Recoverer lists the same pair and the two
+			// must agree — this package cannot import internal/app to share it.
+			if !strings.HasPrefix(r.URL.Path, "/api") && !strings.HasPrefix(r.URL.Path, "/midtrans") {
 				h.Set("Content-Security-Policy", contentSecurityPolicy)
 			}
 

@@ -22,12 +22,13 @@ import (
 // text/html and only ever loads pages/{public,admin}/*.html.
 
 // robotsDisallow lists the paths no crawler should index: the admin panel, the
-// JSON API, the SSO entry points, and every page that only makes sense for a
-// signed-in user (each of which redirects to Appskep anyway, so a crawler that
-// followed one would index a login screen).
+// JSON API and the payment webhook beside it, the SSO entry points, and every
+// page that only makes sense for a signed-in user (each of which redirects to
+// Appskep anyway, so a crawler that followed one would index a login screen).
 var robotsDisallow = []string{
 	"/admin",
 	"/api",
+	"/midtrans",
 	"/booking",
 	"/riwayat",
 	"/profil",
