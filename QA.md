@@ -103,6 +103,42 @@ These are the ones this file exists for.
 - [ ] **A 422 re-render keeps every typed value.** Submit the booking form with a
       bad phone number: the message appears and nothing entered is lost.
 
+### The booking calendar (step 2)
+
+Steps 2 and 3 share one frame, `booking_jadwal`. Everything below is a
+consequence of that, and curl sees none of it: a fetched document is always
+self-consistent, and only a partial swap in a live DOM can be wrong.
+
+- [ ] **A date click swaps in place.** Pick a date on `/booking`: the grid and the
+      slot panel change, the page does **not** scroll, and the address bar
+      advances to `?tanggal=`. Back returns to the previous date.
+- [ ] **A month arrow swaps in place and keeps the selection.** With a date
+      chosen, press ›: the grid moves on, the panel still shows the chosen date's
+      times, and the URL carries both `bulan` and `tanggal`. A date or slot link
+      must **never** carry `bulan` — that would pin the calendar to a month the
+      visitor left.
+- [ ] **The stale step-3 form is gone.** Pick a slot so step 3 appears, then click
+      a **different** date. Step 3 must disappear with it. Before the calendar
+      landed, the frame swapped and the form stayed — hidden `slot` and all — so
+      the calendar showed one date while the form was about to book another.
+- [ ] **"Konfirmasi & lanjut ke pembayaran" still leaves the page.** It 303s out
+      of the frame; without `data-turbo-frame="_top"` Turbo finds no
+      `booking_jadwal` in `/pembayaran`, empties the frame, and the button appears
+      to do nothing. Same for the **Riwayat** link in the already-booked notice,
+      and the reason no empty state on this page carries an action link.
+- [ ] **"Lihat ringkasan" still answers 200 inside the frame** — `data-turbo="false"`
+      has to keep Turbo out of it now that the form sits inside `booking_jadwal`.
+- [ ] **The arrows are absent, not dimmed, at the window edges.** First month: no
+      ‹. Last bookable month: no ›. The month name must not shift when one goes.
+- [ ] **Tab reaches only bookable days.** Past, full and out-of-window cells are
+      `<div>`s and must be skipped entirely; the selected day announces
+      `aria-current`, and a day link reads as "Kamis, 6 Agustus 2026 · 3 slot
+      tersedia" rather than a bare number.
+- [ ] **At 390px**: one column, calendar then panel; the seven columns never
+      reflow; the "3 slot" chip stays legible.
+- [ ] **With JavaScript off**, every date, month and slot link is an ordinary
+      navigation that renders the same page.
+
 ## 3. The payment path
 
 Sandbox only. `MIDTRANS_ENV` must not be `midtrans.Production`.

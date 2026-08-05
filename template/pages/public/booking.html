@@ -12,9 +12,9 @@
   reviewed rather than whatever the form above happens to hold by then. Same
   shape as the jadwal generator and the bulk delete.
 
-  Nothing here needs JavaScript. Turbo makes the date picker swap in place via
-  the booking_slots frame; without it, the same links are ordinary navigations
-  that render the same page.
+  Nothing here needs JavaScript. Turbo makes the calendar and the slot panel swap
+  in place via the booking_jadwal frame; without it, the same links are ordinary
+  navigations that render the same page.
 */}}
 {{- define "content" -}}
 {{$svc := .Data.Service}}
@@ -87,41 +87,190 @@
     {{end}}
   </section>
 
+  {{/* ============================== LANGKAH 2 & 3 — JADWAL, LALU DATA
+
+    Both steps live inside ONE Turbo Frame, and that is a fix rather than a
+    tidy-up.
+
+    Before this, only the slot list was framed. Picking a different date swapped
+    the list while the step-3 form — with the OLD slot still in its hidden
+    field — stayed on screen underneath it: the calendar showed one date and the
+    form below was about to book another. The URL had already advanced, so a
+    reload changed the page under the customer as well. Putting step 3 inside the
+    frame makes a date change replace both at once, so what is highlighted and
+    what would be submitted can never disagree. It also means choosing a slot
+    reveals the form in place instead of costing a full visit that scrolls back
+    to the top of the page.
+
+    Two consequences, both load-bearing:
+
+      * links inside a frame navigate THAT frame, so anything in here that leaves
+        /booking needs data-turbo-frame="_top" — the confirm form (which 303s to
+        /pembayaran) and the Riwayat link. Without it Turbo follows the redirect,
+        finds no booking_jadwal element in the response, and EMPTIES the frame
+        instead of navigating. That is why none of the empty states carries an
+        ActionHref either.
+      * the <turbo-frame> sits OUTSIDE the step guards so the element exists at
+        every step. A layanan deactivated between two clicks drops load() back to
+        step 1, and a frame response with no matching frame is emptied.
+
+    data-turbo-action="advance" so a date, month or slot swap also updates the
+    address bar, which keeps the back button honest. No autoscroll attribute:
+    frames do not scroll on render unless asked, and the swap has to happen where
+    it stands.
+  */}}
+  <turbo-frame id="booking_jadwal" data-turbo-action="advance" class="block">
+
   {{/* ============================================== LANGKAH 2 — JADWAL */}}
   {{if ge .Data.Step 2}}
+    {{$month := .Data.Month}}
     <section class="mt-10" aria-labelledby="langkah-jadwal">
       <div class="flex items-center gap-3">
         <span class="grid h-7 w-7 shrink-0 place-items-center rounded-pill bg-clay-600 text-xs font-bold text-paper">2</span>
         <h2 id="langkah-jadwal" class="font-display text-lg font-bold">Pilih jadwal</h2>
       </div>
 
-      {{if .Data.Dates}}
-        {{/* Horizontal date strip. Each link carries data-turbo-frame so Turbo
-             pulls only the slot list out of the response; the same href is a
-             plain navigation when Turbo is not running. */}}
-        <div class="mt-4 -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <ul class="flex w-max gap-2 pb-1">
-            {{range .Data.Dates}}
-              <li>
-                <a href="{{.Href}}" data-turbo-frame="booking_slots"
-                   {{if .Selected}}aria-current="date"{{end}}
-                   class="flex min-w-[6.5rem] flex-col rounded-card border px-4 py-3 text-center transition
-                          {{if .Selected}}border-clay-500 bg-clay-50 text-clay-700{{else}}border-line bg-paper hover:border-clay-500{{end}}">
-                  <span class="text-sm font-semibold">{{dateCompact .Date}}</span>
-                  <span class="mt-1 text-xs text-ink-soft">{{.Free}} slot</span>
+      {{if $month.WindowFree}}
+        {{/* Calendar left, slot panel right from lg; stacked below it, calendar
+             first, on a phone. */}}
+        <div class="mt-4 grid gap-6 lg:grid-cols-3">
+
+          {{/* ------------------------------------------------- KALENDER */}}
+          <div class="overflow-hidden rounded-card border border-line bg-paper shadow-card lg:col-span-2">
+
+            <div class="flex items-center justify-between gap-3 border-b border-line px-3 py-2.5">
+              {{if $month.PrevHref}}
+                <a href="{{$month.PrevHref}}" data-turbo-frame="booking_jadwal"
+                   class="grid h-9 w-9 place-items-center rounded-field text-ink-soft transition hover:bg-paper-2">
+                  <span class="sr-only">Bulan sebelumnya</span>
+                  {{icon "chevron-left" "h-4 w-4"}}
                 </a>
-              </li>
+              {{else}}
+                {{/* A spacer, not a dimmed arrow. A control that cannot act is
+                     removed — a disabled-looking button still reads as clickable
+                     and there is no tooltip on touch — but the month name must
+                     not shift sideways when it goes. */}}
+                <span class="h-9 w-9" aria-hidden="true"></span>
+              {{end}}
+
+              <p class="font-display text-base font-bold">{{monthID $month.Anchor}}</p>
+
+              {{if $month.NextHref}}
+                <a href="{{$month.NextHref}}" data-turbo-frame="booking_jadwal"
+                   class="grid h-9 w-9 place-items-center rounded-field text-ink-soft transition hover:bg-paper-2">
+                  <span class="sr-only">Bulan berikutnya</span>
+                  {{icon "chevron-right" "h-4 w-4"}}
+                </a>
+              {{else}}
+                <span class="h-9 w-9" aria-hidden="true"></span>
+              {{end}}
+            </div>
+
+            {{/* A real table: the columns ARE weekdays, so <th scope="col"> gives
+                 every cell its column for nothing and table-fixed keeps the seven
+                 equal without a grid. No role="grid" — that promises arrow-key
+                 navigation, and there is no JavaScript here to provide it. */}}
+            <table class="w-full table-fixed border-collapse">
+              <caption class="sr-only">Tanggal yang masih bisa dibooking pada {{monthID $month.Anchor}}</caption>
+              <thead>
+                <tr class="bg-paper-2 text-[0.65rem] font-semibold uppercase tracking-wide text-ink-soft sm:text-xs">
+                  <th scope="col" class="border-b border-line py-2 font-semibold">Sen</th>
+                  <th scope="col" class="border-b border-line py-2 font-semibold">Sel</th>
+                  <th scope="col" class="border-b border-line py-2 font-semibold">Rab</th>
+                  <th scope="col" class="border-b border-line py-2 font-semibold">Kam</th>
+                  <th scope="col" class="border-b border-line py-2 font-semibold">Jum</th>
+                  <th scope="col" class="border-b border-line py-2 font-semibold">Sab</th>
+                  <th scope="col" class="border-b border-line py-2 font-semibold">Min</th>
+                </tr>
+              </thead>
+              <tbody>
+                {{range $month.Weeks}}
+                  <tr>
+                    {{range .}}
+                      <td class="border-b border-r border-line p-0 align-top last:border-r-0">
+                        {{if .Href}}
+                          {{/* aria-label carries the whole cell, because what it
+                               shows is a bare number over a count chip. */}}
+                          <a href="{{.Href}}" data-turbo-frame="booking_jadwal"
+                             aria-label="{{.Label}}"
+                             {{if .Selected}}aria-current="date"{{end}}
+                             class="flex min-h-[3.75rem] w-full flex-col gap-1 p-1.5 transition sm:min-h-[4.5rem] sm:p-2
+                                    {{if .Selected}}bg-clay-50 ring-2 ring-inset ring-clay-600{{else}}hover:bg-clay-50{{end}}">
+                            <span class="grid h-6 w-6 place-items-center rounded-pill text-xs font-semibold
+                                         {{if .IsToday}}bg-clay-600 text-paper{{else}}text-ink{{end}}">{{.Day}}</span>
+                            <span class="mt-auto block rounded-[0.4rem] bg-forest-100 px-1 py-0.5 text-center text-[0.65rem] font-semibold leading-tight text-forest-700 sm:text-xs">
+                              {{.Free}} slot
+                            </span>
+                          </a>
+                        {{else}}
+                          {{/* Not bookable — past, beyond the window, or full. A
+                               <div>, never a dimmed <a>: it must not be focusable
+                               and Tab must skip it. Selected can still be true
+                               here, when the last slot on the chosen date was
+                               taken between the two queries. */}}
+                          <div {{if .Selected}}aria-current="date"{{end}}
+                               class="flex min-h-[3.75rem] flex-col p-1.5 sm:min-h-[4.5rem] sm:p-2
+                                      {{if .Outside}}bg-paper-2/50{{end}}
+                                      {{if .Selected}}ring-2 ring-inset ring-line{{end}}">
+                            <span class="grid h-6 w-6 place-items-center rounded-pill text-xs
+                                         {{if .IsToday}}bg-clay-200 font-semibold text-clay-700{{else}}text-ink-faint{{end}}">{{.Day}}</span>
+                          </div>
+                        {{end}}
+                      </td>
+                    {{end}}
+                  </tr>
+                {{end}}
+              </tbody>
+            </table>
+
+            {{/* A month inside the window with nothing on it. Not the empty
+                 partial: the calendar itself is the affordance and the arrow
+                 beside the month name is the way out, so this is a line under the
+                 grid rather than a block that replaces it. */}}
+            {{if not $month.Free}}
+              <p class="border-t border-line px-4 py-3 text-center text-sm text-ink-soft">
+                Tidak ada jadwal tersedia di bulan ini. Coba bulan lain.
+              </p>
             {{end}}
-          </ul>
+          </div>
+
+          {{/* ------------------------------------- SLOT DI TANGGAL TERPILIH */}}
+          <div class="lg:sticky lg:top-6 lg:col-span-1 lg:self-start">
+            {{if .Data.Date.IsZero}}
+              {{template "empty" .Data.EmptyPick}}
+            {{else if .Data.Slots}}
+              <div class="rounded-card border border-line bg-paper p-4 shadow-card">
+                <h3 id="jadwal-terpilih" class="font-display text-base font-bold">{{dateID .Data.Date}}</h3>
+                <p class="mt-0.5 text-sm text-ink-soft">Pilih jam mulai.</p>
+                <ul class="mt-3 grid gap-2" aria-labelledby="jadwal-terpilih">
+                  {{range .Data.Slots}}
+                    <li>
+                      {{/* No data-turbo-frame="_top" any more: step 3 lives inside
+                           this frame now, so the form appears in place instead of
+                           costing a full render and a scroll to the top. */}}
+                      <a href="{{.Href}}" data-turbo-frame="booking_jadwal"
+                         {{if .Selected}}aria-current="true"{{end}}
+                         class="flex items-center justify-between gap-3 rounded-field border px-3 py-2.5 text-sm transition
+                                {{if .Selected}}border-clay-500 bg-clay-50{{else}}border-line bg-paper hover:border-clay-500{{end}}">
+                        <span class="font-semibold">{{timeRange .Slot.StartTime .Slot.EndTime}}</span>
+                        <span class="flex items-center gap-2 text-xs text-ink-soft">
+                          {{if gt .Slot.Capacity 1}}<span>{{.Left}} tersisa</span>{{end}}
+                          {{if .Selected}}{{icon "check-circle" "h-4 w-4 text-clay-600"}}{{end}}
+                        </span>
+                      </a>
+                    </li>
+                  {{end}}
+                </ul>
+              </div>
+            {{else}}
+              {{template "empty" .Data.EmptySlots}}
+            {{end}}
+          </div>
         </div>
 
-        {{/* data-turbo-action="advance" so a date swap also updates the address
-             bar, which keeps the back button honest. */}}
-        <turbo-frame id="booking_slots" data-turbo-action="advance" class="block">
-          {{template "booking_slots" .}}
-        </turbo-frame>
-
       {{else}}
+        {{/* Nothing free anywhere in the window. A different message from a quiet
+             month, and only Month.WindowFree can tell the two apart. */}}
         <div class="mt-4">{{template "empty" .Data.EmptyDates}}</div>
       {{end}}
     </section>
@@ -143,8 +292,12 @@
             {{icon "info" "h-4 w-4"}}
           </span>
           <p class="min-w-0 text-sm">
+            {{/* data-turbo-frame="_top" because this link leaves /booking from
+                 inside the booking_jadwal frame. Without it Turbo looks for a
+                 booking_jadwal element in /riwayat, finds none, and empties the
+                 frame instead of navigating. */}}
             Anda sudah punya booking aktif untuk jadwal ini. Satu jadwal hanya bisa dibooking sekali
-            per akun — cek <a href="/riwayat" class="font-semibold text-clay-700 underline">Riwayat</a>.
+            per akun — cek <a href="/riwayat" data-turbo-frame="_top" class="font-semibold text-clay-700 underline">Riwayat</a>.
           </p>
         </div>
       {{end}}
@@ -162,7 +315,12 @@
         The review cannot redirect: its state is the customer's name, phone and
         address, and putting those in a URL is exactly what this flow avoids. So
         Turbo stands aside for this one form and the browser posts it natively.
-        The confirm form below DOES redirect (303), so Turbo handles that one.
+        The confirm form below DOES redirect (303), so Turbo handles that one —
+        out to _top, since it leaves /booking.
+
+        Unaffected by this form now sitting inside the booking_jadwal frame:
+        data-turbo="false" means Turbo never intercepts the submission at all, so
+        there is no frame for it to target or empty.
       */}}
       <form method="post" action="/booking" data-turbo="false" class="mt-4">
         {{csrfField .CSRF}}
@@ -290,8 +448,15 @@
           {{end}}
 
           {{/* Every value re-posted verbatim, so the commit writes what was
-               reviewed rather than whatever the form above holds now. */}}
-          <form method="post" action="/booking" class="mt-6">
+               reviewed rather than whatever the form above holds now.
+
+               data-turbo-frame="_top" is load-bearing since step 3 moved inside
+               the frame. This form answers 303 to /booking/{code}/pembayaran,
+               which has no booking_jadwal element — inside a frame Turbo follows
+               the redirect, fails to match, and EMPTIES the frame rather than
+               navigating, so the button appears to do nothing. curl cannot see
+               that: it never runs Turbo, and the 303 it follows is correct. */}}
+          <form method="post" action="/booking" data-turbo-frame="_top" class="mt-6">
             {{csrfField .CSRF}}
             <input type="hidden" name="konfirmasi" value="1">
             <input type="hidden" name="layanan" value="{{.Data.Form.Layanan}}">
@@ -310,42 +475,8 @@
       {{end}}
     </section>
   {{end}}
+
+  </turbo-frame>
 </div>
 
-{{- end -}}
-
-
-{{/*
-  The slot list for one date. Takes the whole view envelope, because it is
-  rendered both inside the page and — when Turbo swaps a date — as the body of
-  the booking_slots frame.
-
-  Links inside a frame navigate that frame by default, so the slot links carry
-  data-turbo-frame="_top": choosing a slot has to reveal step 3, which lives
-  outside this frame.
-*/}}
-{{- define "booking_slots" -}}
-  {{if .Data.Date.IsZero}}
-    <p class="mt-4 text-sm text-ink-soft">Pilih tanggal di atas untuk melihat jam yang tersedia.</p>
-  {{else if .Data.Slots}}
-    <p class="mt-5 text-sm font-semibold">{{dateID .Data.Date}}</p>
-    <ul class="mt-3 grid gap-2 sm:grid-cols-2">
-      {{range .Data.Slots}}
-        <li>
-          <a href="{{.Href}}" data-turbo-frame="_top"
-             {{if .Selected}}aria-current="true"{{end}}
-             class="flex items-center justify-between gap-3 rounded-card border px-4 py-3 text-sm transition
-                    {{if .Selected}}border-clay-500 bg-clay-50{{else}}border-line bg-paper hover:border-clay-500{{end}}">
-            <span class="font-semibold">{{timeRange .Slot.StartTime .Slot.EndTime}}</span>
-            <span class="flex items-center gap-2 text-xs text-ink-soft">
-              {{if gt .Slot.Capacity 1}}<span>{{.Left}} tersisa</span>{{end}}
-              {{if .Selected}}{{icon "check-circle" "h-4 w-4 text-clay-600"}}{{end}}
-            </span>
-          </a>
-        </li>
-      {{end}}
-    </ul>
-  {{else}}
-    <div class="mt-4">{{template "empty" .Data.EmptySlots}}</div>
-  {{end}}
 {{- end -}}

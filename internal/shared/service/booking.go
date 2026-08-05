@@ -180,6 +180,159 @@ func (b *Booking) AvailableDates(ctx context.Context) ([]AvailableDate, error) {
 	return dates, nil
 }
 
+// AvailableDay is one square of the public booking calendar.
+//
+// Deliberately not Schedule.DayCell: that counts every slot a date holds,
+// including the inactive and the fully booked ones, because an operator needs to
+// see what exists. A visitor may only be shown what can still be booked. Two
+// types, because the two questions have different answers.
+type AvailableDay struct {
+	Date time.Time
+	Day  int
+	// Outside marks a neighbouring month's day, drawn to complete the week.
+	Outside bool
+	IsToday bool
+	// InWindow is whether this date lies inside Window() at all — false for a past
+	// day and for anything beyond booking_max_days_ahead.
+	InWindow bool
+	// Free is how many slots on this date can still be booked. Always 0 outside
+	// the window, whatever the counts happened to hold.
+	Free int64
+}
+
+// Bookable reports a day the picker may link to. It is the only condition the
+// template asks about, so "greyed out" and "not a link" cannot drift apart.
+func (d AvailableDay) Bookable() bool { return d.InWindow && d.Free > 0 }
+
+// AvailableMonth is the public calendar: whole weeks, Monday first, with only
+// bookable days carrying a count.
+type AvailableMonth struct {
+	// Anchor is the first of the month actually rendered, which is the requested
+	// month clamped into the booking window — see buildAvailableMonth.
+	Anchor time.Time
+	Weeks  [][]AvailableDay
+	// Prev and Next are monthLayout anchors, and empty at the edges of the booking
+	// window. The template omits the control rather than dimming it: a coming-soon
+	// CTA is replaced, never disabled, and an arrow that leads to forty inert
+	// cells is the same defect.
+	Prev string
+	Next string
+	// Free counts the slots this month's own days offer, so the line under the
+	// grid describes the month it names rather than the whole grid.
+	Free int64
+	// WindowFree counts what the whole booking window still offers, whatever the
+	// anchor. It is what separates "this month is quiet, try the next one" from
+	// "there is nothing to book at all" — two different messages, and only this
+	// can tell them apart.
+	WindowFree int64
+}
+
+// AvailableMonth builds the public calendar for the month containing anchor.
+//
+// It is AvailableDates re-shaped, not a second query: that call already returns
+// every free date across the whole window with its count, in one statement bound
+// by Window(). Reading the month's slots separately — the way Schedule.Month does
+// for the admin — would mean a second definition of "bookable" to keep in step
+// with the first, and the grid could then advertise a date the slot panel
+// refuses.
+func (b *Booking) AvailableMonth(ctx context.Context, anchor time.Time) (AvailableMonth, error) {
+	dates, err := b.AvailableDates(ctx)
+	if err != nil {
+		return AvailableMonth{}, err
+	}
+
+	// Keyed by the formatted date rather than the time.Time: two values for the
+	// same calendar day are only equal if their wall clock and location match
+	// exactly, and the key sidesteps that entirely (Schedule.Month's rule).
+	free := make(map[string]int64, len(dates))
+	for _, d := range dates {
+		free[d.Date.Format(dateLayout)] = d.Free
+	}
+
+	_, until := b.schedule.Window()
+	return buildAvailableMonth(anchor, b.schedule.Today(), until, free, b.loc), nil
+}
+
+// buildAvailableMonth is the grid arithmetic, with every input passed in so it is
+// reachable without a store behind it.
+//
+// today and until are the booking window as dates — the first and the last day
+// that may hold a bookable slot, both inclusive. Window()'s startsAt is an instant
+// and has already done its work: it is what decided which dates appear in free at
+// all, so nothing here has to reason about the lead time. That split is the point.
+// A slot two hours from now is inside today and outside the window, and only the
+// query knows it.
+func buildAvailableMonth(
+	anchor, today, until time.Time,
+	free map[string]int64,
+	loc *time.Location,
+) AvailableMonth {
+	first := time.Date(anchor.Year(), anchor.Month(), 1, 0, 0, 0, 0, loc)
+
+	// A hand-typed ?bulan= from outside the window is clamped, not rendered.
+	// Rendering it gives a grid of forty inert cells and a Prev arrow the visitor
+	// would have to press forty times to escape from, and the clamp is also what
+	// makes the two conditions below reduce to "" at exactly the two edges.
+	if lo := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, loc); first.Before(lo) {
+		first = lo
+	}
+	if hi := time.Date(until.Year(), until.Month(), 1, 0, 0, 0, 0, loc); first.After(hi) {
+		first = hi
+	}
+	last := first.AddDate(0, 1, -1)
+
+	// Back up to the Monday on or before the 1st, then forward to the Sunday on or
+	// after the last — the grid always holds whole weeks. mondayOffset is
+	// Schedule.Month's, shared rather than rewritten: time.Weekday starts on Sunday
+	// and that difference is handled in exactly one place.
+	gridStart := first.AddDate(0, 0, -mondayOffset(first.Weekday()))
+	gridEnd := last.AddDate(0, 0, 6-mondayOffset(last.Weekday()))
+
+	view := AvailableMonth{Anchor: first}
+
+	// The previous month exists only if the window reaches back into it, the next
+	// only if it reaches forward. AddDate normalises the year, so December's Next
+	// is the following January without a special case.
+	if prev := first.AddDate(0, -1, 0); !prev.AddDate(0, 1, -1).Before(today) {
+		view.Prev = prev.Format(monthLayout)
+	}
+	if next := first.AddDate(0, 1, 0); !next.After(until) {
+		view.Next = next.Format(monthLayout)
+	}
+
+	for _, n := range free {
+		view.WindowFree += n
+	}
+
+	for d := gridStart; !d.After(gridEnd); d = d.AddDate(0, 0, 7) {
+		week := make([]AvailableDay, 0, 7)
+		for i := range 7 {
+			day := d.AddDate(0, 0, i)
+			cell := AvailableDay{
+				Date:     day,
+				Day:      day.Day(),
+				Outside:  day.Month() != first.Month(),
+				IsToday:  day.Equal(today),
+				InWindow: !day.Before(today) && !day.After(until),
+			}
+			// Inside the window is checked before the counts are read, not after.
+			// AvailableDates is already bounded by the same window, so today the two
+			// agree — but this count is what the cell renders and what makes it
+			// clickable, and it must not be able to survive a widened query.
+			if cell.InWindow {
+				cell.Free = free[day.Format(dateLayout)]
+			}
+			if !cell.Outside {
+				view.Free += cell.Free
+			}
+			week = append(week, cell)
+		}
+		view.Weeks = append(view.Weeks, week)
+	}
+
+	return view
+}
+
 // AvailableSlots lists the free slots on one date.
 //
 // A date outside the window returns nothing rather than an error: the query

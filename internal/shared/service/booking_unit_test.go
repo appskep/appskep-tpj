@@ -162,6 +162,329 @@ func TestBookingCodesHaveRealEntropy(t *testing.T) {
 	}
 }
 
+// buildAvailableMonth: the public calendar's arithmetic.
+//
+// Every input is a parameter, which is what keeps these nine tests free of
+// MariaDB — and is also the reason the function exists separately from
+// AvailableMonth, which is nothing but a query and this call.
+
+// monthDay builds a date in the test location. The grid compares dates with
+// Equal and Before, so every value one of these tests hands it has to be built
+// the same way the production code builds today and until.
+func monthDay(t *testing.T, y int, m time.Month, d int) time.Time {
+	t.Helper()
+	return time.Date(y, m, d, 0, 0, 0, 0, testLoc(t))
+}
+
+// freeOn turns a list of days in one month into the map buildAvailableMonth
+// takes, keyed the way AvailableMonth keys it.
+func freeOn(t *testing.T, y int, m time.Month, days map[int]int64) map[string]int64 {
+	t.Helper()
+	free := make(map[string]int64, len(days))
+	for day, n := range days {
+		free[monthDay(t, y, m, day).Format(dateLayout)] = n
+	}
+	return free
+}
+
+// findDay locates one date in the grid. It returns the cell by value; every
+// assertion below is on a copy, which is fine because nothing mutates it.
+func findDay(t *testing.T, v AvailableMonth, want time.Time) AvailableDay {
+	t.Helper()
+	for _, week := range v.Weeks {
+		for _, cell := range week {
+			if cell.Date.Equal(want) {
+				return cell
+			}
+		}
+	}
+	t.Fatalf("%s is not in the grid", want.Format(dateLayout))
+	return AvailableDay{}
+}
+
+// TestBuildAvailableMonthIsWholeWeeksMondayFirst. A week that reflows is not a
+// week; the grid always holds seven-day rows starting on Monday, with the
+// leading and trailing days of the neighbouring months drawn in to complete
+// them. August 2026 starts on a Saturday, which is the case that exercises both
+// ends.
+func TestBuildAvailableMonthIsWholeWeeksMondayFirst(t *testing.T) {
+	loc := testLoc(t)
+	today := monthDay(t, 2026, time.August, 5)
+	until := monthDay(t, 2026, time.September, 4)
+
+	v := buildAvailableMonth(monthDay(t, 2026, time.August, 1), today, until, nil, loc)
+
+	if len(v.Weeks) == 0 {
+		t.Fatal("no weeks")
+	}
+	for i, week := range v.Weeks {
+		if len(week) != 7 {
+			t.Fatalf("week %d has %d days, want 7", i, len(week))
+		}
+	}
+	if got := v.Weeks[0][0].Date.Weekday(); got != time.Monday {
+		t.Errorf("the grid starts on %v, want Monday", got)
+	}
+	last := v.Weeks[len(v.Weeks)-1]
+	if got := last[6].Date.Weekday(); got != time.Sunday {
+		t.Errorf("the grid ends on %v, want Sunday", got)
+	}
+
+	// 1 August 2026 is a Saturday, so the first row holds five days of July.
+	for i := range 5 {
+		if !v.Weeks[0][i].Outside {
+			t.Errorf("Weeks[0][%d] (%s) is not marked Outside", i,
+				v.Weeks[0][i].Date.Format(dateLayout))
+		}
+	}
+	if v.Weeks[0][5].Outside {
+		t.Error("1 August is marked Outside its own month")
+	}
+	if !v.Anchor.Equal(monthDay(t, 2026, time.August, 1)) {
+		t.Errorf("Anchor = %s, want 2026-08-01", v.Anchor.Format(dateLayout))
+	}
+}
+
+// TestBuildAvailableMonthPrevIsEmptyAtTheWindowStart. This is the clamp the
+// visitor sees: at the near edge there is no back arrow at all, because a month
+// entirely before the window is forty inert cells.
+func TestBuildAvailableMonthPrevIsEmptyAtTheWindowStart(t *testing.T) {
+	loc := testLoc(t)
+	today := monthDay(t, 2026, time.August, 5)
+	until := monthDay(t, 2026, time.September, 4)
+
+	at := buildAvailableMonth(monthDay(t, 2026, time.August, 1), today, until, nil, loc)
+	if at.Prev != "" {
+		t.Errorf("Prev = %q at the window's own month, want empty", at.Prev)
+	}
+
+	next := buildAvailableMonth(monthDay(t, 2026, time.September, 1), today, until, nil, loc)
+	if next.Prev != "2026-08" {
+		t.Errorf("Prev = %q one month on, want 2026-08", next.Prev)
+	}
+}
+
+// TestBuildAvailableMonthNextIsEmptyAtTheWindowEnd. The far edge, and the
+// boundary is inclusive: a window ending on 30 September still offers September,
+// so Next must be empty there rather than one month too generous.
+func TestBuildAvailableMonthNextIsEmptyAtTheWindowEnd(t *testing.T) {
+	loc := testLoc(t)
+	today := monthDay(t, 2026, time.September, 1)
+
+	within := buildAvailableMonth(
+		monthDay(t, 2026, time.September, 1), today, monthDay(t, 2026, time.September, 30), nil, loc)
+	if within.Next != "" {
+		t.Errorf("Next = %q with until inside the anchor month, want empty", within.Next)
+	}
+
+	beyond := buildAvailableMonth(
+		monthDay(t, 2026, time.September, 1), today, monthDay(t, 2026, time.October, 1), nil, loc)
+	if beyond.Next != "2026-10" {
+		t.Errorf("Next = %q with until in the next month, want 2026-10", beyond.Next)
+	}
+}
+
+// TestBuildAvailableMonthNextCrossesTheYear. AddDate normalises, so this needs no
+// special case in the code — but it is exactly what a hand-rolled month+1 gets
+// wrong, and a booking window spanning New Year is an ordinary December.
+func TestBuildAvailableMonthNextCrossesTheYear(t *testing.T) {
+	loc := testLoc(t)
+	today := monthDay(t, 2026, time.December, 20)
+	until := monthDay(t, 2027, time.January, 19)
+
+	v := buildAvailableMonth(monthDay(t, 2026, time.December, 1), today, until, nil, loc)
+
+	if v.Next != "2027-01" {
+		t.Errorf("Next = %q, want 2027-01", v.Next)
+	}
+	if v.Prev != "" {
+		t.Errorf("Prev = %q, want empty — the window starts in December", v.Prev)
+	}
+
+	jan := buildAvailableMonth(monthDay(t, 2027, time.January, 1), today, until, nil, loc)
+	if jan.Prev != "2026-12" {
+		t.Errorf("Prev = %q, want 2026-12", jan.Prev)
+	}
+}
+
+// TestBuildAvailableMonthClampsAnAnchorOutsideTheWindow. ?bulan= is
+// attacker-supplied like every other query parameter, and a 2030 anchor rendered
+// literally is a page with nothing on it and a Prev arrow forty presses from the
+// way back.
+func TestBuildAvailableMonthClampsAnAnchorOutsideTheWindow(t *testing.T) {
+	loc := testLoc(t)
+	today := monthDay(t, 2026, time.August, 5)
+	until := monthDay(t, 2026, time.September, 4)
+
+	far := buildAvailableMonth(monthDay(t, 2030, time.January, 1), today, until, nil, loc)
+	if !far.Anchor.Equal(monthDay(t, 2026, time.September, 1)) {
+		t.Errorf("Anchor = %s, want it clamped to 2026-09-01", far.Anchor.Format(dateLayout))
+	}
+	if far.Next != "" {
+		t.Errorf("Next = %q at the far edge, want empty", far.Next)
+	}
+	if far.Prev == "" {
+		t.Error("Prev is empty at the far edge — there would be no way back")
+	}
+
+	past := buildAvailableMonth(monthDay(t, 1999, time.February, 1), today, until, nil, loc)
+	if !past.Anchor.Equal(monthDay(t, 2026, time.August, 1)) {
+		t.Errorf("Anchor = %s, want it clamped to 2026-08-01", past.Anchor.Format(dateLayout))
+	}
+	if past.Prev != "" {
+		t.Errorf("Prev = %q at the near edge, want empty", past.Prev)
+	}
+}
+
+// TestBuildAvailableMonthIgnoresCountsOutsideTheWindow is the load-bearing one.
+//
+// AvailableDates is bounded by the same window, so today the two agree and this
+// can never fire. That is precisely why it is here: the count is what renders in
+// the cell and what makes it a link, and a widened query — or a caller that
+// passed a different map — must not be able to turn a past or too-distant day
+// into something a visitor can click.
+func TestBuildAvailableMonthIgnoresCountsOutsideTheWindow(t *testing.T) {
+	loc := testLoc(t)
+	today := monthDay(t, 2026, time.August, 10)
+	until := monthDay(t, 2026, time.August, 20)
+
+	free := freeOn(t, 2026, time.August, map[int]int64{
+		3:  5, // before today
+		15: 2, // inside
+		28: 7, // past until
+	})
+
+	v := buildAvailableMonth(monthDay(t, 2026, time.August, 1), today, until, free, loc)
+
+	for _, day := range []int{3, 28} {
+		cell := findDay(t, v, monthDay(t, 2026, time.August, day))
+		if cell.Free != 0 {
+			t.Errorf("%d August is outside the window but carries Free = %d", day, cell.Free)
+		}
+		if cell.InWindow {
+			t.Errorf("%d August is marked InWindow", day)
+		}
+		if cell.Bookable() {
+			t.Errorf("%d August is bookable — a visitor could click a day that cannot be booked", day)
+		}
+	}
+
+	inside := findDay(t, v, monthDay(t, 2026, time.August, 15))
+	if !inside.Bookable() || inside.Free != 2 {
+		t.Errorf("15 August: Free = %d, Bookable = %v; want 2 and true", inside.Free, inside.Bookable())
+	}
+
+	// And the discarded counts must not reach the month total either.
+	if v.Free != 2 {
+		t.Errorf("Free = %d, want 2 — only the in-window day counts", v.Free)
+	}
+}
+
+// TestBuildAvailableMonthOutsideDaysDoNotCountTowardTheMonth. A trailing cell
+// belonging to the next month is still a real bookable date — clicking it is how
+// the calendar carries forward — but the line under the grid names this month, so
+// it must not be counted there.
+func TestBuildAvailableMonthOutsideDaysDoNotCountTowardTheMonth(t *testing.T) {
+	loc := testLoc(t)
+	today := monthDay(t, 2026, time.August, 25)
+	until := monthDay(t, 2026, time.September, 24)
+
+	free := map[string]int64{
+		monthDay(t, 2026, time.August, 26).Format(dateLayout):    3,
+		monthDay(t, 2026, time.September, 1).Format(dateLayout):  4,
+		monthDay(t, 2026, time.September, 20).Format(dateLayout): 9,
+	}
+
+	v := buildAvailableMonth(monthDay(t, 2026, time.August, 1), today, until, free, loc)
+
+	// 31 August 2026 is a Monday, so the last row runs into September and holds
+	// the 1st.
+	sept1 := findDay(t, v, monthDay(t, 2026, time.September, 1))
+	if !sept1.Outside {
+		t.Fatal("1 September is not marked Outside in the August grid")
+	}
+	if !sept1.Bookable() {
+		t.Error("1 September is not bookable — a trailing cell must still carry the calendar forward")
+	}
+	if v.Free != 3 {
+		t.Errorf("Free = %d, want 3 — only August's own days", v.Free)
+	}
+	if v.WindowFree != 16 {
+		t.Errorf("WindowFree = %d, want 16 — the whole window regardless of the anchor", v.WindowFree)
+	}
+}
+
+// TestBuildAvailableMonthWindowFreeIsAnchorIndependent. WindowFree is what tells
+// "this month is quiet, try the next" apart from "there is nothing to book at
+// all", so it must describe the window and never the page.
+func TestBuildAvailableMonthWindowFreeIsAnchorIndependent(t *testing.T) {
+	loc := testLoc(t)
+	today := monthDay(t, 2026, time.August, 20)
+	until := monthDay(t, 2026, time.September, 19)
+
+	free := map[string]int64{
+		monthDay(t, 2026, time.August, 22).Format(dateLayout):    2,
+		monthDay(t, 2026, time.September, 10).Format(dateLayout): 5,
+	}
+
+	for _, anchor := range []time.Time{
+		monthDay(t, 2026, time.August, 1),
+		monthDay(t, 2026, time.September, 1),
+		monthDay(t, 2030, time.January, 1), // clamped, and still the same total
+	} {
+		v := buildAvailableMonth(anchor, today, until, free, loc)
+		if v.WindowFree != 7 {
+			t.Errorf("anchor %s: WindowFree = %d, want 7",
+				anchor.Format(monthLayout), v.WindowFree)
+		}
+	}
+}
+
+// TestBuildAvailableMonthMarksExactlyOneToday. Today is drawn differently from
+// every other cell, and it appears in two grids — its own month's, and the
+// leading week of the next month's. Marking it twice in one grid, or not at all,
+// are both visible mistakes.
+func TestBuildAvailableMonthMarksExactlyOneToday(t *testing.T) {
+	loc := testLoc(t)
+	today := monthDay(t, 2026, time.August, 31) // a Monday, so it leads September's grid
+	until := monthDay(t, 2026, time.September, 30)
+
+	for _, tc := range []struct {
+		name        string
+		anchor      time.Time
+		wantOutside bool
+	}{
+		{"its own month", monthDay(t, 2026, time.August, 1), false},
+		{"the next month's leading week", monthDay(t, 2026, time.September, 1), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			v := buildAvailableMonth(tc.anchor, today, until, nil, loc)
+
+			var marked []AvailableDay
+			for _, week := range v.Weeks {
+				for _, cell := range week {
+					if cell.IsToday {
+						marked = append(marked, cell)
+					}
+				}
+			}
+			if len(marked) != 1 {
+				t.Fatalf("%d cells marked IsToday, want exactly 1", len(marked))
+			}
+			if !marked[0].Date.Equal(today) {
+				t.Errorf("IsToday is on %s, want %s",
+					marked[0].Date.Format(dateLayout), today.Format(dateLayout))
+			}
+			if marked[0].Outside != tc.wantOutside {
+				t.Errorf("Outside = %v, want %v", marked[0].Outside, tc.wantOutside)
+			}
+			if !marked[0].InWindow {
+				t.Error("today is not InWindow — the window starts today")
+			}
+		})
+	}
+}
+
 func TestSlotMessage(t *testing.T) {
 	loc := testLoc(t)
 	b := testBooking(t, map[string]string{

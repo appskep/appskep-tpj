@@ -73,6 +73,10 @@ const (
 
 	// dateLayout is what <input type="date"> submits and what the filters carry.
 	dateLayout = "2006-01-02"
+
+	// monthLayout is what the ?bulan= anchor carries, on both calendars — the
+	// admin's and the public booking one.
+	monthLayout = "2006-01"
 )
 
 // Status filter values. They appear in query strings, so they are Indonesian
@@ -264,7 +268,7 @@ func (s *Schedule) Month(ctx context.Context, anchor time.Time) (MonthView, erro
 		ToSlotDate:   gridEnd,
 	})
 	if err != nil {
-		return MonthView{}, fmt.Errorf("listing slots for %s: %w", first.Format("2006-01"), err)
+		return MonthView{}, fmt.Errorf("listing slots for %s: %w", first.Format(monthLayout), err)
 	}
 
 	// One pass into a per-date bucket, keyed by the formatted date rather than the
@@ -290,8 +294,8 @@ func (s *Schedule) Month(ctx context.Context, anchor time.Time) (MonthView, erro
 	today := s.dayOf(time.Now().In(s.loc))
 	view := MonthView{
 		Anchor: first,
-		Prev:   first.AddDate(0, -1, 0).Format("2006-01"),
-		Next:   first.AddDate(0, 1, 0).Format("2006-01"),
+		Prev:   first.AddDate(0, -1, 0).Format(monthLayout),
+		Next:   first.AddDate(0, 1, 0).Format(monthLayout),
 	}
 
 	for d := gridStart; !d.After(gridEnd); d = d.AddDate(0, 0, 7) {
@@ -1050,7 +1054,7 @@ func (s *Schedule) ParseDate(v string) time.Time {
 
 // ParseMonth reads a "2006-01" anchor, falling back to the current month.
 func (s *Schedule) ParseMonth(v string) time.Time {
-	t, err := time.ParseInLocation("2006-01", strings.TrimSpace(v), s.loc)
+	t, err := time.ParseInLocation(monthLayout, strings.TrimSpace(v), s.loc)
 	if err != nil {
 		return s.dayOf(time.Now().In(s.loc))
 	}

@@ -66,7 +66,10 @@ type bookingData struct {
 	// Service is nil until a layanan resolves, which is what keeps Step at 1.
 	Service *sqlc.Service
 
-	Dates []dateOption
+	// Month is the calendar grid for the anchor month. Always built from step 2
+	// on, including on the 422 re-render, where it comes back anchored on the date
+	// the rejected form still holds.
+	Month bookingMonth
 	// Date is zero until one is chosen. Derived from the chosen slot when there
 	// is one, so the two can never disagree.
 	Date  time.Time
@@ -93,20 +96,50 @@ type bookingData struct {
 	EmptyDates    emptyState
 	EmptySlots    emptyState
 	EmptyServices emptyState
+	// EmptyPick is the slot panel before a date is chosen. A placeholder rather
+	// than an error, but it is the same partial and the copy belongs beside the
+	// other three so all four are read together.
+	EmptyPick emptyState
 }
 
-// dateOption and slotOption are one entry in each picker, with the link and the
+// dayOption and slotOption are one entry in each picker, with the link and the
 // selected state resolved here rather than in the template.
 //
 // The template could neither build the query string safely nor compare two
 // time.Time values for "same day" — and there is no dict helper to assemble a
 // payload with, by design. A handler-side struct is the established answer
-// (Phase 4's confirmDialog).
-type dateOption struct {
-	Date     time.Time
-	Free     int64
+// (Phase 4's confirmDialog). The service row is EMBEDDED, so field access is
+// unchanged by promotion — the same shape as serviceToggle and slotToggle.
+type dayOption struct {
+	service.AvailableDay
+	// Href is EMPTY for a day that cannot be booked. The template branches on it
+	// alone: an empty href renders an inert <div>, never a dead <a>, so a cell
+	// that looks unclickable also is unclickable and untabbable.
 	Href     string
 	Selected bool
+	// Label is the whole cell read aloud — "Kamis, 6 Agustus 2026 · 3 slot
+	// tersedia". What the cell shows is a bare number over a count chip, which
+	// means nothing on its own, and no FuncMap entry can join a formatted date to
+	// a number.
+	Label string
+}
+
+// bookingMonth is the calendar the template ranges over.
+type bookingMonth struct {
+	Anchor time.Time
+	Weeks  [][]dayOption
+	// PrevHref and NextHref are empty at the edges of the booking window, and the
+	// template then omits the control entirely — the same rule as the coming-soon
+	// CTA: a dimmed arrow still reads as pressable, and on touch there is no
+	// tooltip to explain why it does nothing. A spacer holds the width so the
+	// month name does not jump.
+	PrevHref string
+	NextHref string
+	// Free is this month's own days; WindowFree is the whole booking window. The
+	// two together are what separate "this month is quiet, try the next one" from
+	// "there is nothing to book at all".
+	Free       int64
+	WindowFree int64
 }
 
 type slotOption struct {
@@ -170,7 +203,9 @@ func (h *Booking) Form(w http.ResponseWriter, r *http.Request) {
 		Slot:    q.Get("slot"),
 	}
 
-	data, err := h.load(r.Context(), values)
+	// ?bulan= is the only place the calendar's anchor ever comes from; a POST has
+	// none and re-derives it from the chosen date.
+	data, err := h.load(r.Context(), values, q.Get("bulan"))
 	if err != nil {
 		h.deps.Log.ErrorContext(r.Context(), "booking: loading form", "error", err)
 		h.deps.ErrorPage(w, r, http.StatusInternalServerError)
@@ -253,7 +288,7 @@ func (h *Booking) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := h.load(r.Context(), values)
+	data, err := h.load(r.Context(), values, "")
 	if err != nil {
 		h.deps.Log.ErrorContext(r.Context(), "booking: loading review", "error", err)
 		h.deps.ErrorPage(w, r, http.StatusInternalServerError)
@@ -565,7 +600,13 @@ func (h *Booking) renderPayment(w http.ResponseWriter, r *http.Request, status i
 // slug that no longer resolves drops the page back to step 1, and a slot that is
 // no longer free drops it back to step 2, rather than rendering a choice the
 // user can no longer make.
-func (h *Booking) load(ctx context.Context, v bookingFormValues) (bookingData, error) {
+//
+// month is the calendar's ?bulan= anchor, and it is a separate parameter rather
+// than a field on bookingFormValues on purpose: those values are echoed back as
+// hidden fields on both POST forms, and the anchor is a view parameter that must
+// never become part of what commits. A POST therefore passes "" and the anchor is
+// re-derived from the date the form still holds.
+func (h *Booking) load(ctx context.Context, v bookingFormValues, month string) (bookingData, error) {
 	data := bookingData{
 		Form:       v,
 		Errors:     map[string]string{},
@@ -584,9 +625,18 @@ func (h *Booking) load(ctx context.Context, v bookingFormValues) (bookingData, e
 		EmptySlots: emptyState{
 			Icon:  "clock",
 			Title: "Tidak ada slot di tanggal ini",
-			Body:  "Pilih tanggal lain di atas.",
+			Body:  "Pilih tanggal lain di kalender.",
+		},
+		EmptyPick: emptyState{
+			Icon:  "calendar-days",
+			Title: "Pilih tanggal dulu",
+			Body:  "Tanggal yang masih punya slot ditandai dengan jumlahnya di kalender.",
 		},
 	}
+	// None of the four may gain an ActionHref. They render inside the
+	// booking_jadwal frame now, empty.html's action is a plain <a>, and a shared
+	// partial cannot carry a per-instance data-turbo-frame — so a link out of one
+	// would empty the frame instead of navigating.
 
 	var err error
 	if data.Services, err = h.deps.Booking.BookableServices(ctx); err != nil {
@@ -613,11 +663,6 @@ func (h *Booking) load(ctx context.Context, v bookingFormValues) (bookingData, e
 	}
 
 	// Step 2 — jadwal.
-	dates, err := h.deps.Booking.AvailableDates(ctx)
-	if err != nil {
-		return data, err
-	}
-
 	slotID := parseSlotID(v.Slot)
 
 	// A chosen slot decides the date. Taking it from the slot rather than from
@@ -645,15 +690,64 @@ func (h *Booking) load(ctx context.Context, v bookingFormValues) (bookingData, e
 		data.Form.Tanggal = selectedDate
 	}
 
-	data.Dates = make([]dateOption, 0, len(dates))
-	for _, d := range dates {
-		iso := util.DateISO(d.Date)
-		data.Dates = append(data.Dates, dateOption{
-			Date:     d.Date,
-			Free:     d.Free,
-			Href:     bookingHref(data.Service.Slug, iso, 0),
-			Selected: iso == selectedDate,
-		})
+	// The calendar's anchor: an explicit ?bulan= wins, then the month of the
+	// chosen date, then this month.
+	//
+	// The middle rule is what keeps the grid showing the date it has highlighted,
+	// and it is also what makes the 422 re-render land correctly: a POST carries no
+	// ?bulan= at all, so the anchor comes back from the hidden tanggal/slot the
+	// rejected form still holds. ParseMonth already falls back to today on an empty
+	// or malformed value, and the grid clamps anything outside the window, so a
+	// hand-typed ?bulan=1999-02 is a picker at the near edge rather than an error
+	// worth a page.
+	//
+	// Deliberately not auto-selecting the first available date so the panel is
+	// never empty: that would make /booking?layanan=x jump straight past the
+	// calendar and change what a bookmarked URL means.
+	anchor := h.deps.Schedule.ParseMonth(month)
+	if strings.TrimSpace(month) == "" && !data.Date.IsZero() {
+		anchor = data.Date
+	}
+
+	grid, gerr := h.deps.Booking.AvailableMonth(ctx, anchor)
+	if gerr != nil {
+		return data, gerr
+	}
+
+	data.Month = bookingMonth{
+		Anchor:     grid.Anchor,
+		Free:       grid.Free,
+		WindowFree: grid.WindowFree,
+		Weeks:      make([][]dayOption, 0, len(grid.Weeks)),
+	}
+	// The month arrows preserve the selection exactly and change only the view,
+	// which is why they are the only links that carry ?bulan=.
+	if grid.Prev != "" {
+		data.Month.PrevHref = bookingMonthHref(data.Service.Slug, selectedDate, slotID, grid.Prev)
+	}
+	if grid.Next != "" {
+		data.Month.NextHref = bookingMonthHref(data.Service.Slug, selectedDate, slotID, grid.Next)
+	}
+
+	for _, week := range grid.Weeks {
+		row := make([]dayOption, 0, len(week))
+		for _, cell := range week {
+			iso := util.DateISO(cell.Date)
+			// Selected is set even for a day that is no longer bookable — the last
+			// slot on it can be taken between the two queries — so the calendar keeps
+			// pointing at the date the panel is describing instead of losing it.
+			opt := dayOption{AvailableDay: cell, Selected: iso == selectedDate}
+			if cell.Bookable() {
+				// No ?bulan= on a day link: the anchor rule above re-derives the month
+				// from the date, which is what lets a trailing cell from the next
+				// month carry the calendar forward with one click.
+				opt.Href = bookingHref(data.Service.Slug, iso, 0)
+				opt.Label = util.DateID(cell.Date) + " · " +
+					strconv.FormatInt(cell.Free, 10) + " slot tersedia"
+			}
+			row = append(row, opt)
+		}
+		data.Month.Weeks = append(data.Month.Weeks, row)
 	}
 
 	if !data.Date.IsZero() {
@@ -719,7 +813,7 @@ func (h *Booking) formError(w http.ResponseWriter, r *http.Request, err error, v
 		return
 	}
 
-	data, lerr := h.load(r.Context(), v)
+	data, lerr := h.load(r.Context(), v, "")
 	if lerr != nil {
 		h.deps.Log.ErrorContext(r.Context(), "booking: reloading rejected form", "error", lerr)
 		h.deps.ErrorPage(w, r, http.StatusInternalServerError)
@@ -779,13 +873,37 @@ func (h *Booking) render(w http.ResponseWriter, r *http.Request, status int, dat
 	})
 }
 
-// bookingHref builds a link back into this page at a given step.
+// bookingHref builds a link that CHANGES THE SELECTION — a date, or a slot.
 //
 // Through net/url rather than string concatenation: a slug is admin-supplied
 // text, and while Slugify keeps today's slugs tame, a URL assembled by hand is
 // the kind of thing that stops being safe long after the person who wrote it
 // stopped looking.
+//
+// It never emits ?bulan=, and that is the point of there being two of these. A
+// date or slot link that dragged the calendar's anchor along would pin the grid
+// to a month the visitor navigated away from three clicks ago.
 func bookingHref(slug, dateISO string, slotID int64) string {
+	return "/booking?" + bookingQuery(slug, dateISO, slotID).Encode()
+}
+
+// bookingMonthHref builds a link that changes only WHICH MONTH IS SHOWN, and is
+// deliberately the only producer of ?bulan=.
+//
+// The anchor is a view parameter: it must survive a month arrow, must not travel
+// on a date or slot link, and must never reach a hidden field on either POST
+// form — what commits is a layanan, a date and a slot, and nothing about the page
+// they were picked on. That is also why load() takes it as its own argument
+// rather than as a field on bookingFormValues.
+func bookingMonthHref(slug, dateISO string, slotID int64, month string) string {
+	q := bookingQuery(slug, dateISO, slotID)
+	if month != "" {
+		q.Set("bulan", month)
+	}
+	return "/booking?" + q.Encode()
+}
+
+func bookingQuery(slug, dateISO string, slotID int64) url.Values {
 	q := url.Values{}
 	q.Set("layanan", slug)
 	if dateISO != "" {
@@ -794,7 +912,7 @@ func bookingHref(slug, dateISO string, slotID int64) string {
 	if slotID > 0 {
 		q.Set("slot", strconv.FormatInt(slotID, 10))
 	}
-	return "/booking?" + q.Encode()
+	return q
 }
 
 // parseSlotID reads a slot id from a query parameter or a hidden field. Anything
