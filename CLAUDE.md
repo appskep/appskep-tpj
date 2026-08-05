@@ -294,6 +294,21 @@ One more, found the hard way in Phase 7 and retrofitted to Phase 5:
 - **The review panel's confirm form is a separate form and it is the one that writes.** Every
   value it does not re-post as a hidden input is silently dropped at the commit while the
   review displayed it. Add a field to step 3 and you have added it in two places.
+- **A modal with no trigger is rendered `open` by the server and upgraded by `app.js`.** The
+  ringkasan is a `<dialog id="ringkasan" data-dialog-open open>`: it arrives *with* the review
+  response, so the delegated `data-dialog` click listener can never reach it and
+  `script-src 'self'` leaves no inline script to call `showModal()`. A `<dialog>` without
+  `open` is `display: none`, which would delete the review panel on the no-JS path while
+  every test stayed green — so `openDialogs` must `close()` first (`showModal()` throws
+  `InvalidStateError` on a dialog that is open but not modal) and guard on `:modal`, since
+  `turbo:load` and `turbo:frame-load` can both fire for one arrival. The two geometries are
+  the `modal:` / `not-modal:` `@custom-variant`s in `input.css`; `not-modal:relative` is
+  load-bearing twice over, because the UA stylesheet floats an open non-modal dialog with
+  `position: absolute` and the close button inside needs the dialog as its containing block.
+  Closing is always the browser's — `<form method="dialog">`, as in
+  `partials/confirm.html` — and there is deliberately no client-side re-open: the summary
+  and the hidden inputs that commit it would then describe values the customer had since
+  edited.
 - **The expiry ticker is `Deps.RunExpiryTicker`**, started in `main.go` on the signal context.
   `defer wg.Wait()` is registered *before* `defer stop()` so every exit path cancels then waits,
   both ahead of `db.Close()`. `EXPIRY_SWEEP_INTERVAL` defaults to 1m and may not be zero.

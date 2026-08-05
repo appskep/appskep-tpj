@@ -35,6 +35,43 @@
     }
   });
 
+  // Dialogs the server renders already open.
+  //
+  // The booking ringkasan has no trigger to click: it arrives with the response
+  // to "Lihat ringkasan", so the delegated handler above can never reach it and
+  // there is no inline script to call showModal() — script-src is 'self' with no
+  // nonce. It is therefore rendered with the `open` attribute, which is what the
+  // no-JS path sees (a plain panel in flow, styled by the not-modal: variants),
+  // and upgraded here to a real modal so that the backdrop, the focus trap and
+  // Escape come from the browser.
+  function openDialogs() {
+    var pending = document.querySelectorAll("dialog[data-dialog-open]");
+    for (var i = 0; i < pending.length; i++) {
+      var dialog = pending[i];
+      if (typeof dialog.showModal !== "function" || dialog.matches(":modal")) {
+        // Already upgraded — turbo:load and turbo:frame-load can both fire for
+        // one arrival, and showModal() on a modal dialog throws.
+        continue;
+      }
+      // showModal() also throws InvalidStateError on a dialog that is open but
+      // NOT modal, which is exactly how the server rendered this one.
+      if (dialog.open) {
+        dialog.close();
+      }
+      dialog.showModal();
+    }
+  }
+
+  // showModal() sets the open attribute, so without this Turbo would snapshot a
+  // dialog mid-modal and restore it as a stray panel. Same discipline as stop()
+  // and destroyMaps(): leave nothing live in a cached page.
+  function closeDialogs() {
+    var open = document.querySelectorAll("dialog[data-dialog-open][open]");
+    for (var i = 0; i < open.length; i++) {
+      open[i].close();
+    }
+  }
+
   // Escape closes an open drawer — the public mobile menu and the admin sidebar,
   // both of which are checkbox-driven so that they work with this file blocked.
   //
@@ -385,9 +422,18 @@
   // The [data-map-ready] guard is what keeps a second slot pick from stacking a
   // second map on the same element, and destroyMaps clears the flag so a
   // restored Turbo snapshot rebuilds rather than showing dead markup.
+  //
+  // openDialogs rides on turbo:load for the same reason: the review panel is a
+  // native full-page load (the step-3 form is data-turbo="false"), and Turbo
+  // dispatches turbo:load on the initial load as well as on its own navigations.
+  // turbo:frame-load is there for symmetry only — a frame navigation on /booking
+  // is always a GET, which renders Review=false and no dialog at all.
   document.addEventListener("turbo:load", start);
   document.addEventListener("turbo:load", initMaps);
+  document.addEventListener("turbo:load", openDialogs);
   document.addEventListener("turbo:frame-load", initMaps);
+  document.addEventListener("turbo:frame-load", openDialogs);
   document.addEventListener("turbo:before-cache", stop);
   document.addEventListener("turbo:before-cache", destroyMaps);
+  document.addEventListener("turbo:before-cache", closeDialogs);
 })();

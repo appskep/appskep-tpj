@@ -403,99 +403,155 @@
 
       {{/* ------------------------------------------------------- RINGKASAN */}}
       {{if .Data.Review}}
-        <div class="mt-8 rounded-card border-2 border-clay-500 bg-paper p-6">
-          <h2 class="font-display text-xl font-bold">Periksa lagi</h2>
-          <p class="mt-1 text-sm text-ink-soft">
-            Setelah dikonfirmasi, slot ini ditahan atas nama Anda dan harus dibayar sebelum batas waktu.
-          </p>
+        {{/*
+          A modal, because this POST answers 200 and the browser therefore lands
+          at the TOP of a long page — steps 1 and 2 and the whole data form — with
+          the panel asking for a decision below the fold. In front of the customer,
+          over a form frozen behind it, is what the review step actually means.
 
-          <dl class="mt-5 divide-y divide-line border-y border-line text-sm">
-            <div class="flex justify-between gap-4 py-3">
-              <dt class="text-ink-soft">Layanan</dt>
-              <dd class="text-right font-semibold">{{$svc.Name}}</dd>
-            </div>
-            <div class="flex justify-between gap-4 py-3">
-              <dt class="text-ink-soft">Jadwal</dt>
-              <dd class="text-right font-semibold">
-                {{dateID $slot.SlotDate}}<br>
-                <span class="font-normal text-ink-soft">{{timeRange $slot.StartTime $slot.EndTime}}</span>
-              </dd>
-            </div>
-            <div class="flex justify-between gap-4 py-3">
-              <dt class="text-ink-soft">Durasi</dt>
-              <dd class="text-right font-semibold">{{duration $svc.DurationMinutes}}</dd>
-            </div>
-            <div class="flex justify-between gap-4 py-3">
-              <dt class="text-ink-soft">Nama</dt>
-              <dd class="text-right font-semibold">{{.Data.Form.Nama}}</dd>
-            </div>
-            <div class="flex justify-between gap-4 py-3">
-              <dt class="text-ink-soft">Telepon</dt>
-              <dd class="text-right font-semibold">{{.Data.Form.Telepon}}</dd>
-            </div>
-            <div class="flex justify-between gap-4 py-3">
-              <dt class="shrink-0 text-ink-soft">Alamat terapi</dt>
-              <dd class="text-right">{{.Data.Form.Alamat}}</dd>
-            </div>
-            {{if .Data.Form.HasLocation}}
-              <div class="flex justify-between gap-4 py-3">
-                <dt class="shrink-0 text-ink-soft">Titik lokasi</dt>
-                {{/* An ordinary link out, not an embed: no origin is loaded, so
-                     the Content-Security-Policy is untouched by it. */}}
-                <dd class="text-right">
-                  <a href="https://www.google.com/maps?q={{.Data.Form.Latitude}},{{.Data.Form.Longitude}}"
-                     target="_blank" rel="noopener noreferrer"
-                     class="font-semibold text-clay-700 underline">Sudah ditandai di peta</a>
-                </dd>
-              </div>
-            {{end}}
-            {{with .Data.Form.Catatan}}
-              <div class="flex justify-between gap-4 py-3">
-                <dt class="shrink-0 text-ink-soft">Catatan</dt>
-                <dd class="text-right">{{.}}</dd>
-              </div>
-            {{end}}
-            <div class="flex items-baseline justify-between gap-4 py-4">
-              <dt class="font-semibold">Total</dt>
-              <dd class="font-display text-2xl font-bold text-clay-600">{{rupiah $svc.Price}}</dd>
-            </div>
-          </dl>
+          Rendered with `open` by the server and upgraded to a real modal by
+          app.js (openDialogs). That order is the whole design:
 
-          {{with .Data.Terms}}
-            <p class="mt-4 text-xs leading-relaxed text-ink-faint">{{.}}</p>
-          {{end}}
+            * script-src is 'self' with no nonce, so there is no inline script to
+              call showModal(), and app.js's other dialog path is click-delegated
+              — it cannot open a dialog that arrives already on the page.
+            * a <dialog> without `open` and without JS is display:none. Shipping
+              that would make the review invisible on the no-JS path, which is the
+              path curl and every integration test exercise, and the one that has
+              worked from the start.
 
-          {{/* Every value re-posted verbatim, so the commit writes what was
-               reviewed rather than whatever the form above holds now.
-
-               data-turbo-frame="_top" is load-bearing since step 3 moved inside
-               the frame. This form answers 303 to /booking/{code}/pembayaran,
-               which has no booking_jadwal element — inside a frame Turbo follows
-               the redirect, fails to match, and EMPTIES the frame rather than
-               navigating, so the button appears to do nothing. curl cannot see
-               that: it never runs Turbo, and the 303 it follows is correct. */}}
-          <form method="post" action="/booking" data-turbo-frame="_top" class="mt-6">
-            {{csrfField .CSRF}}
-            <input type="hidden" name="konfirmasi" value="1">
-            <input type="hidden" name="layanan" value="{{.Data.Form.Layanan}}">
-            <input type="hidden" name="tanggal" value="{{.Data.Form.Tanggal}}">
-            <input type="hidden" name="slot" value="{{.Data.Form.Slot}}">
-            <input type="hidden" name="nama" value="{{.Data.Form.Nama}}">
-            <input type="hidden" name="telepon" value="{{.Data.Form.Telepon}}">
-            <input type="hidden" name="alamat" value="{{.Data.Form.Alamat}}">
-            {{/* The pin, re-posted like everything else. This form is the one
-                 that WRITES, and the map widget lives in the other one — leave
-                 these out and the review would show a location the commit
-                 silently discards. */}}
-            <input type="hidden" name="latitude" value="{{.Data.Form.Latitude}}">
-            <input type="hidden" name="longitude" value="{{.Data.Form.Longitude}}">
-            <input type="hidden" name="catatan" value="{{.Data.Form.Catatan}}">
-
-            <button type="submit" class="{{template "btn_primary"}} w-full">
-              {{icon "check" "h-4 w-4"}} Konfirmasi &amp; lanjut ke pembayaran
+          So `open` is not decoration: remove it and the summary disappears for
+          anyone whose JS failed to load, while every test still passes.
+          not-modal:* is the geometry for that fallback, modal:* for the upgrade.
+        */}}
+        <dialog id="ringkasan" data-dialog-open open
+                aria-labelledby="ringkasan-judul"
+                class="rounded-card border-2 border-clay-500 bg-paper p-0 text-ink backdrop:bg-forest-950/60
+                       not-modal:relative not-modal:mt-8 not-modal:w-full
+                       modal:w-[min(34rem,calc(100vw-2rem))] modal:max-h-[calc(100dvh-3rem)]
+                       modal:overflow-y-auto modal:shadow-lifted">
+          {{/* Close is pure HTML — method="dialog" — exactly as in partials/confirm.html.
+               Escape, the focus trap and the backdrop all come from the browser
+               once showModal() is what opened the element, so there is no JS close
+               path anywhere in this project. */}}
+          <form method="dialog" class="absolute right-3 top-3">
+            <button class="grid h-9 w-9 place-items-center rounded-field text-ink-soft transition hover:bg-paper-2"
+                    aria-label="Tutup">
+              {{icon "x" "h-4 w-4"}}
             </button>
           </form>
-        </div>
+
+          <div class="p-6">
+            <h2 id="ringkasan-judul" class="font-display text-xl font-bold">Periksa lagi</h2>
+            <p class="mt-1 text-sm text-ink-soft">
+              Setelah dikonfirmasi, slot ini ditahan atas nama Anda dan harus dibayar sebelum batas waktu.
+            </p>
+
+            <dl class="mt-5 divide-y divide-line border-y border-line text-sm">
+              <div class="flex justify-between gap-4 py-3">
+                <dt class="text-ink-soft">Layanan</dt>
+                <dd class="text-right font-semibold">{{$svc.Name}}</dd>
+              </div>
+              <div class="flex justify-between gap-4 py-3">
+                <dt class="text-ink-soft">Jadwal</dt>
+                <dd class="text-right font-semibold">
+                  {{dateID $slot.SlotDate}}<br>
+                  <span class="font-normal text-ink-soft">{{timeRange $slot.StartTime $slot.EndTime}}</span>
+                </dd>
+              </div>
+              <div class="flex justify-between gap-4 py-3">
+                <dt class="text-ink-soft">Durasi</dt>
+                <dd class="text-right font-semibold">{{duration $svc.DurationMinutes}}</dd>
+              </div>
+              <div class="flex justify-between gap-4 py-3">
+                <dt class="text-ink-soft">Nama</dt>
+                <dd class="text-right font-semibold">{{.Data.Form.Nama}}</dd>
+              </div>
+              <div class="flex justify-between gap-4 py-3">
+                <dt class="text-ink-soft">Telepon</dt>
+                <dd class="text-right font-semibold">{{.Data.Form.Telepon}}</dd>
+              </div>
+              <div class="flex justify-between gap-4 py-3">
+                <dt class="shrink-0 text-ink-soft">Alamat terapi</dt>
+                <dd class="text-right">{{.Data.Form.Alamat}}</dd>
+              </div>
+              {{if .Data.Form.HasLocation}}
+                <div class="flex justify-between gap-4 py-3">
+                  <dt class="shrink-0 text-ink-soft">Titik lokasi</dt>
+                  {{/* An ordinary link out, not an embed: no origin is loaded, so
+                       the Content-Security-Policy is untouched by it. */}}
+                  <dd class="text-right">
+                    <a href="https://www.google.com/maps?q={{.Data.Form.Latitude}},{{.Data.Form.Longitude}}"
+                       target="_blank" rel="noopener noreferrer"
+                       class="font-semibold text-clay-700 underline">Sudah ditandai di peta</a>
+                  </dd>
+                </div>
+              {{end}}
+              {{with .Data.Form.Catatan}}
+                <div class="flex justify-between gap-4 py-3">
+                  <dt class="shrink-0 text-ink-soft">Catatan</dt>
+                  <dd class="text-right">{{.}}</dd>
+                </div>
+              {{end}}
+              <div class="flex items-baseline justify-between gap-4 py-4">
+                <dt class="font-semibold">Total</dt>
+                <dd class="font-display text-2xl font-bold text-clay-600">{{rupiah $svc.Price}}</dd>
+              </div>
+            </dl>
+
+            {{with .Data.Terms}}
+              <p class="mt-4 text-xs leading-relaxed text-ink-faint">{{.}}</p>
+            {{end}}
+
+            {{/* Two sibling forms, never nested — the dialog's own close form and
+                 the one that writes. "Ubah data" comes first in source so that
+                 flex-col-reverse puts the commit on top on a phone, and so that
+                 the last <form to open before name="konfirmasi" is still the
+                 commit form: internal/integration/location_test.go finds it by
+                 walking backwards from that input.
+
+                 There is deliberately no way to re-open this dialog without
+                 re-submitting. Closing it returns to an editable form, and a
+                 client-side re-open would show a summary — and commit hidden
+                 inputs — describing values the customer has since changed. */}}
+            <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <form method="dialog">
+                <button class="{{template "btn_ghost"}} w-full sm:w-auto">Ubah data</button>
+              </form>
+
+              {{/* Every value re-posted verbatim, so the commit writes what was
+                   reviewed rather than whatever the form above holds now.
+
+                   data-turbo-frame="_top" is load-bearing since step 3 moved inside
+                   the frame. This form answers 303 to /booking/{code}/pembayaran,
+                   which has no booking_jadwal element — inside a frame Turbo follows
+                   the redirect, fails to match, and EMPTIES the frame rather than
+                   navigating, so the button appears to do nothing. curl cannot see
+                   that: it never runs Turbo, and the 303 it follows is correct. */}}
+              <form method="post" action="/booking" data-turbo-frame="_top">
+                {{csrfField .CSRF}}
+                <input type="hidden" name="konfirmasi" value="1">
+                <input type="hidden" name="layanan" value="{{.Data.Form.Layanan}}">
+                <input type="hidden" name="tanggal" value="{{.Data.Form.Tanggal}}">
+                <input type="hidden" name="slot" value="{{.Data.Form.Slot}}">
+                <input type="hidden" name="nama" value="{{.Data.Form.Nama}}">
+                <input type="hidden" name="telepon" value="{{.Data.Form.Telepon}}">
+                <input type="hidden" name="alamat" value="{{.Data.Form.Alamat}}">
+                {{/* The pin, re-posted like everything else. This form is the one
+                     that WRITES, and the map widget lives in the other one — leave
+                     these out and the review would show a location the commit
+                     silently discards. */}}
+                <input type="hidden" name="latitude" value="{{.Data.Form.Latitude}}">
+                <input type="hidden" name="longitude" value="{{.Data.Form.Longitude}}">
+                <input type="hidden" name="catatan" value="{{.Data.Form.Catatan}}">
+
+                <button type="submit" class="{{template "btn_primary"}} w-full sm:w-auto">
+                  {{icon "check" "h-4 w-4"}} Konfirmasi &amp; lanjut ke pembayaran
+                </button>
+              </form>
+            </div>
+          </div>
+        </dialog>
       {{end}}
     </section>
   {{end}}

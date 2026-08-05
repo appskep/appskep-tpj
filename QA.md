@@ -40,7 +40,7 @@ to escape something, and it renders visibly).
 - [ ] `/layanan/urut-therapeutic` — detail, with the jadwal-terdekat preview
 - [ ] a coming-soon layanan — the CTA is **replaced**, not dimmed or disabled
 - [ ] `/booking` — steps 1, 2 and 3
-- [ ] `/booking` review panel (POST without `konfirmasi=1`)
+- [ ] `/booking` review panel (POST without `konfirmasi=1`) — opens as a modal
 - [ ] `/pembayaran` — with a live hold
 - [ ] `/booking/{code}/konfirmasi` — in each status: pending, paid, cancelled, expired
 - [ ] `/riwayat` — with and without bookings, and each status filter
@@ -80,6 +80,9 @@ These are the ones this file exists for.
 - [ ] **Both confirm dialogs open** — the layanan delete and the jadwal bulk
       delete. They are `data-dialog` attributes read by one delegated listener;
       an inline `onclick` would be blocked by the CSP.
+- [ ] **The ringkasan dialog opens by itself** — see *The ringkasan modal* below.
+      It is the only dialog with no button to click, so it is the only one the
+      delegated listener cannot reach.
 - [x] **The mobile drawers toggle** at 390 in both layouts — both slide in from
       the left, under their hamburger. They are CSS-only (`peer-checked:`), so the
       checkbox must be a *sibling* of everything it drives. Close each three ways:
@@ -138,6 +141,37 @@ self-consistent, and only a partial swap in a live DOM can be wrong.
       reflow; the "3 slot" chip stays legible.
 - [ ] **With JavaScript off**, every date, month and slot link is an ordinary
       navigation that renders the same page.
+
+### The ringkasan modal (step 3 → review)
+
+The panel is a `<dialog>` the **server renders `open`** and `app.js` upgrades to a
+real modal. There is no button to click it open — it arrives with the response —
+so the delegated `data-dialog` listener cannot reach it, and `script-src 'self'`
+leaves no inline script that could. `make test` proves the attribute is there and
+nothing more: whether the upgrade happens is browser-only.
+
+- [ ] **It opens by itself, centred, over a dimmed page.** Fill step 3 and press
+      "Lihat ringkasan". If it appears as a panel *below the form* instead, the
+      `showModal()` upgrade did not run — check the console for a CSP violation or
+      an `InvalidStateError`.
+- [ ] **Escape closes it. The X closes it. "Ubah data" closes it.** All three are
+      the browser's own: `method="dialog"` and the modal's Escape handling. There
+      is no JS close path to break.
+- [ ] **The form behind is intact and editable after a close** — every field still
+      filled, including the map pin. Press "Lihat ringkasan" again: the summary
+      shows the *edited* values, because re-opening it costs a real POST that
+      re-runs validation. There is deliberately no client-side re-open.
+- [ ] **A long summary scrolls inside the dialog, not the page.** Book with a long
+      alamat and a long catatan at 390px; the confirm button must stay reachable.
+- [ ] **"Konfirmasi & lanjut ke pembayaran"** still lands on `/pembayaran` from
+      inside the dialog — it is the `data-turbo-frame="_top"` path above, now one
+      level deeper. **Repeat this one in Firefox**, which re-checks `form-action`
+      on every redirect hop where Chrome does not.
+- [ ] **A 422 shows no dialog.** Submit with the nama blank: the field errors must
+      be visible on the form, with nothing covering them.
+- [ ] **With JavaScript off**, the summary renders as a plain panel below the form
+      and the confirm button still books. This is what the `open` attribute buys;
+      without it the panel would be `display: none` and the flow would dead-end.
 
 ### The location picker (Phase 13.5)
 

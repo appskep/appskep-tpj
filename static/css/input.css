@@ -30,6 +30,24 @@
 /* Tailwind scans these for class names. The path is relative to this file. */
 @source "../../template";
 
+/* :modal has no built-in variant in Tailwind v4, and it is needed because one
+ * <dialog> has to look right in two states. The booking ringkasan is rendered
+ * with the `open` attribute by the server — so that it is visible on the no-JS
+ * path, where nothing can ever call showModal() — and app.js upgrades it to a
+ * real modal. Those two states want different geometry, and only the browser
+ * knows which one an element is in.
+ *
+ * not-modal is the load-bearing half: the UA stylesheet gives an open non-modal
+ * <dialog> `position: absolute`, which would tear the fallback panel out of the
+ * page flow and float it over the form. The reset is `not-modal:relative` rather
+ * than `static`, because the close button inside is absolutely positioned and
+ * needs the dialog itself as its containing block — static would fling it to the
+ * corner of the viewport. Author styles beat UA styles regardless of specificity,
+ * so it has to be scoped to :not(:modal) or it would break the modal too, whose
+ * `position: fixed` comes from that same UA sheet. */
+@custom-variant modal (&:modal);
+@custom-variant not-modal (&:not(:modal));
+
 @theme {
   /* --- Surfaces -------------------------------------------------------- */
   /* Warm paper, not white and not the cream everyone reaches for. */

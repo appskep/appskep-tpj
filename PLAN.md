@@ -34,6 +34,7 @@ Sistem booking & pembayaran online: **Go monolith + chi + sqlc + MariaDB + Go ht
 | 12 | Hardening (CSRF, rate limit, validation, errors) | DONE | 2026-07-27. Session-bound CSRF with per-render masking, per-route token buckets over a trusted-proxy client IP, a strict CSP that cost the app its last four inline scripts, a global body cap, and `private, no-store` on authenticated pages. Two defects found by verification (a 403 where a 413 belonged; Turbo's progress-bar stylesheet blocked by `style-src`), and a third on 2026-07-28 (the pay button dead in a browser: Turbo `fetch()`ing a cross-origin 303 into CORS and `connect-src`; `form-action` also had to name the Snap hosts). **`govulncheck`: 30 stdlib findings, all fixed by a toolchain bump — Phase 14 must build on go1.25.12+.** See **Phase 12 notes** below |
 | 13 | Testing | DONE | 2026-07-28. 33 test files, ~250 tests, in three tiers: pure unit beside the code, DB-backed in `internal/integration`, harness in `internal/testsupport`. Every earlier phase's deferred ask is now permanent, including the concurrency test PLAN.md calls the one that matters most. Stdlib `testing` only. Two real defects found (a 500 on an empty webhook body; a predicate named for a rule it did not implement), and three load-bearing tests proven to fail by breaking the code they guard. CI deferred to Phase 14. See **Phase 13 notes** below |
 | 13.5 | Booking form — prefill & lokasi | DONE | 2026-08-05. Two additions to `/booking` step 3, both requested after Phase 13. The phone and address now fall back **per field** to the customer's last booking when the profile is blank, and a Leaflet map with one draggable pin adds optional coordinates carried through to the admin detail page and the CSV. Leaflet vendored beside Turbo rather than Google Maps JS, which would have cost `style-src 'unsafe-inline'`; the CSP's `img-src` is now **derived from `MAP_TILE_URL`** so the two cannot drift. One real defect found by a test (html/template URL-normalising `data-map-tile-url`, which percent-escaped Leaflet's `{s}/{z}/{x}/{y}` into a host that does not exist — correct-looking markup, blank grey map), and one load-bearing test proven to fail by breaking the code it guards. See **Phase 13.5 notes** below |
+| 13.6 | Ringkasan as a modal | DONE | 2026-08-05. The booking review panel moved into a `<dialog>` that opens over step 3, because the review POST answers 200 through a `data-turbo="false"` form and the browser therefore landed at the top of the page with the panel below the fold. Presentation only — the two-POST flow, the validation and the commit form's hidden inputs are untouched. The one hard part: this dialog has **no trigger to click**, so it is rendered `<dialog open>` by the server and upgraded by `app.js` — without `open` it would be `display: none` and the review would vanish on the no-JS path while every test stayed green. `modal:` / `not-modal:` are the project's first two `@custom-variant`s. Two new tests, both seen red. See **Phase 13.6** below |
 | 14 | Deployment & go-live | TODO | |
 
 ---
@@ -1820,6 +1821,50 @@ words; address search on the map; coordinates in the transactional emails, since
 `EmailBookingCreated` addresses the customer, who knows where they live; and moving the map
 defaults into the `settings` table, which would let an operator change them at runtime while
 the CSP header still named the old host.
+
+---
+
+## Phase 13.6 — The ringkasan as a modal
+
+- [x] The booking review panel moved into a `<dialog>` that opens over the form. Presentation
+      only: the two-POST flow, the validation and the hidden inputs that commit are unchanged.
+- [x] `TestTheReviewPanelIsADialogRenderedOpen` and `TestARejectedSubmitRendersNoDialog`;
+      `make test` green, and both seen red by deleting the attribute they guard.
+
+Why: the review POST answers 200 and the step-3 form is `data-turbo="false"`, so the browser
+does a native full-page load and lands at the **top** of the page — steps 1 and 2 and the
+whole data form sitting above the panel that is asking for a decision. The customer had to
+scroll back past the form they had just filled in, and that form stayed on screen, apparently
+editable, beside a summary that no longer tracked it.
+
+### The thing that was not obvious
+
+**This dialog has no trigger to click.** It arrives *with* the response, so `app.js`'s
+delegated `data-dialog` listener — open-only, on click — can never see it, and
+`script-src 'self'` with no nonce leaves no inline script to call `showModal()`. Rendering it
+`<dialog open>` and upgrading it in `openDialogs` on `turbo:load` is what keeps the no-JS path
+alive: a `<dialog>` without `open` is `display: none`, which would have deleted the review
+panel for anyone whose JavaScript failed to load while `curl`, every integration test and the
+page source all stayed perfectly correct. The new test asserts `open` on the opening tag for
+exactly that reason.
+
+Three smaller traps, all of them browser-only:
+
+- `showModal()` throws `InvalidStateError` on a dialog that is open but **not** modal — which
+  is precisely how the server renders it — so the upgrade has to `close()` first.
+- `turbo:load` and `turbo:frame-load` can both fire for one arrival, so the loop guards on
+  `:modal` rather than assuming it runs once.
+- The UA stylesheet gives an open non-modal `<dialog>` `position: absolute`, so the fallback
+  floats out of flow and over the form unless it is reset — and the reset has to be
+  `not-modal:relative`, not `static`, because the close button inside is absolutely positioned
+  and would otherwise anchor to the viewport. `modal:` and `not-modal:` are the project's first
+  two `@custom-variant`s; `:modal` has no built-in variant in Tailwind v4, and declaring them
+  in `input.css` beats scattering `[&:not(:modal)]:` through the markup.
+
+**Not done, deliberately:** a client-side re-open. Closing the dialog returns to an editable
+form, and the only way back to the summary is another "Lihat ringkasan" — which re-runs
+`Booking.Validate`. Re-opening the same element would show a summary, and commit hidden
+inputs, describing values the customer had since changed.
 
 ---
 
