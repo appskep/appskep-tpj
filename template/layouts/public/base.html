@@ -147,15 +147,16 @@
           </button>
         </form>
       {{else}}
-        <a href="{{loginURL .Page.Path}}" class="rounded-field px-3 py-2 text-sm font-medium text-paper/75 transition hover:text-paper">
+        {{/* The bar's CTA slot. Booking used to sit here as a clay button beside
+             this link, which duplicated the "Booking" entry in publicNav — most
+             visibly once signed in, where the group also carries the account chip
+             and logout. The nav item is the single Booking link now, and the slot
+             goes to the one action a guest cannot reach from the nav. Same class
+             list as the admin layout's Masuk, so both render the same button. */}}
+        <a href="{{loginURL .Page.Path}}" class="rounded-field bg-clay-600 px-4 py-2 text-sm font-semibold text-paper transition hover:bg-clay-500">
           Masuk
         </a>
       {{end}}
-
-      <a href="/booking" class="hidden rounded-field bg-clay-600 px-4 py-2 text-sm font-semibold text-paper transition hover:bg-clay-500 sm:inline-block">
-        Booking
-      </a>
-
     </div>
   </div>
 
@@ -248,9 +249,9 @@
       </ul>
     </nav>
 
-    {{/* The primary action. The clay button in the bar is sm:inline-block, so
-         below 640px — exactly where the hamburger lives — this is the only
-         Booking CTA on the page. */}}
+    {{/* The primary action. The bar carries no Booking button at any width — its
+         CTA slot is the guest Masuk link — so below md, exactly where the
+         hamburger lives, this is the only Booking CTA on the page. */}}
     <div class="shrink-0 border-t border-forest-900 p-3">
       <a href="/booking" class="block w-full rounded-field bg-clay-600 px-4 py-3 text-center text-sm font-semibold text-paper transition hover:bg-clay-500">
         Booking
