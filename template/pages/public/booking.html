@@ -423,13 +423,20 @@
           So `open` is not decoration: remove it and the summary disappears for
           anyone whose JS failed to load, while every test still passes.
           not-modal:* is the geometry for that fallback, modal:* for the upgrade.
+
+          modal:m-auto is the one that is easy to lose. A modal <dialog> is
+          centred by the UA stylesheet's `margin: auto` against inset:0 — and
+          Tailwind's preflight zeroes the margin on `*`, so without this the
+          box is over-constrained and pins to a corner of the viewport.
+          partials/confirm.html carries the same class for the same reason; it
+          is unscoped there because that dialog is only ever modal.
         */}}
         <dialog id="ringkasan" data-dialog-open open
                 aria-labelledby="ringkasan-judul"
                 class="rounded-card border-2 border-clay-500 bg-paper p-0 text-ink backdrop:bg-forest-950/60
                        not-modal:relative not-modal:mt-8 not-modal:w-full
-                       modal:w-[min(34rem,calc(100vw-2rem))] modal:max-h-[calc(100dvh-3rem)]
-                       modal:overflow-y-auto modal:shadow-lifted">
+                       modal:m-auto modal:w-[min(34rem,calc(100vw-2rem))]
+                       modal:max-h-[calc(100dvh-3rem)] modal:overflow-y-auto modal:shadow-lifted">
           {{/* Close is pure HTML — method="dialog" — exactly as in partials/confirm.html.
                Escape, the focus trap and the backdrop all come from the browser
                once showModal() is what opened the element, so there is no JS close

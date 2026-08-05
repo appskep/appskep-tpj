@@ -1848,7 +1848,13 @@ panel for anyone whose JavaScript failed to load while `curl`, every integration
 page source all stayed perfectly correct. The new test asserts `open` on the opening tag for
 exactly that reason.
 
-Three smaller traps, all of them browser-only:
+Four smaller traps, all of them browser-only:
+
+- **A modal `<dialog>` needs `m-auto` to be centred, and Tailwind takes it away.** The UA
+  stylesheet centres it with `margin: auto` against `inset: 0`; preflight zeroes `margin` on
+  `*`, which leaves the box over-constrained and pinned to a corner of the viewport. Found by
+  looking at it. `partials/confirm.html` has carried `m-auto` since Phase 4 for this reason —
+  the class reads like arbitrary styling and is load-bearing.
 
 - `showModal()` throws `InvalidStateError` on a dialog that is open but **not** modal — which
   is precisely how the server renders it — so the upgrade has to `close()` first.

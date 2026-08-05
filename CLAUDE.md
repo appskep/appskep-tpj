@@ -305,6 +305,10 @@ One more, found the hard way in Phase 7 and retrofitted to Phase 5:
   the `modal:` / `not-modal:` `@custom-variant`s in `input.css`; `not-modal:relative` is
   load-bearing twice over, because the UA stylesheet floats an open non-modal dialog with
   `position: absolute` and the close button inside needs the dialog as its containing block.
+  **`modal:m-auto` is the one that is easy to lose**: a modal `<dialog>` is centred by the UA
+  stylesheet's `margin: auto` against `inset: 0`, and Tailwind's preflight zeroes `margin` on
+  `*` — so without it the box is over-constrained and pins to a corner. `confirm.html` carries
+  the same class, unscoped, because that dialog is only ever modal.
   Closing is always the browser's — `<form method="dialog">`, as in
   `partials/confirm.html` — and there is deliberately no client-side re-open: the summary
   and the hidden inputs that commit it would then describe values the customer had since
