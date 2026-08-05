@@ -176,9 +176,10 @@ func (q *Queries) CountBookingsByUser(ctx context.Context, arg CountBookingsByUs
 const createBooking = `-- name: CreateBooking :execresult
 
 INSERT INTO bookings (booking_code, user_id, service_id, slot_id,
-                      customer_name, customer_phone, customer_address, notes,
+                      customer_name, customer_phone, customer_address,
+                      latitude, longitude, notes,
                       price_amount, status, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_payment', ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_payment', ?)
 `
 
 type CreateBookingParams struct {
@@ -189,6 +190,8 @@ type CreateBookingParams struct {
 	CustomerName    string         `json:"customer_name"`
 	CustomerPhone   string         `json:"customer_phone"`
 	CustomerAddress sql.NullString `json:"customer_address"`
+	Latitude        sql.NullString `json:"latitude"`
+	Longitude       sql.NullString `json:"longitude"`
 	Notes           sql.NullString `json:"notes"`
 	PriceAmount     string         `json:"price_amount"`
 	ExpiresAt       sql.NullTime   `json:"expires_at"`
@@ -215,6 +218,8 @@ func (q *Queries) CreateBooking(ctx context.Context, arg CreateBookingParams) (s
 		arg.CustomerName,
 		arg.CustomerPhone,
 		arg.CustomerAddress,
+		arg.Latitude,
+		arg.Longitude,
 		arg.Notes,
 		arg.PriceAmount,
 		arg.ExpiresAt,
@@ -232,7 +237,7 @@ func (q *Queries) ExpireBooking(ctx context.Context, id int64) (sql.Result, erro
 }
 
 const getBooking = `-- name: GetBooking :one
-SELECT id, booking_code, user_id, service_id, slot_id, customer_name, customer_phone, customer_address, notes, price_amount, status, expires_at, confirmed_at, completed_at, cancelled_at, cancelled_reason, reminder_sent_at, active_slot_id, created_at, updated_at FROM bookings WHERE id = ? LIMIT 1
+SELECT id, booking_code, user_id, service_id, slot_id, customer_name, customer_phone, customer_address, latitude, longitude, notes, price_amount, status, expires_at, confirmed_at, completed_at, cancelled_at, cancelled_reason, reminder_sent_at, active_slot_id, created_at, updated_at FROM bookings WHERE id = ? LIMIT 1
 `
 
 func (q *Queries) GetBooking(ctx context.Context, id int64) (Booking, error) {
@@ -247,6 +252,8 @@ func (q *Queries) GetBooking(ctx context.Context, id int64) (Booking, error) {
 		&i.CustomerName,
 		&i.CustomerPhone,
 		&i.CustomerAddress,
+		&i.Latitude,
+		&i.Longitude,
 		&i.Notes,
 		&i.PriceAmount,
 		&i.Status,
@@ -264,7 +271,7 @@ func (q *Queries) GetBooking(ctx context.Context, id int64) (Booking, error) {
 }
 
 const getBookingAdminDetail = `-- name: GetBookingAdminDetail :one
-SELECT b.id, b.booking_code, b.user_id, b.service_id, b.slot_id, b.customer_name, b.customer_phone, b.customer_address, b.notes, b.price_amount, b.status, b.expires_at, b.confirmed_at, b.completed_at, b.cancelled_at, b.cancelled_reason, b.reminder_sent_at, b.active_slot_id, b.created_at, b.updated_at,
+SELECT b.id, b.booking_code, b.user_id, b.service_id, b.slot_id, b.customer_name, b.customer_phone, b.customer_address, b.latitude, b.longitude, b.notes, b.price_amount, b.status, b.expires_at, b.confirmed_at, b.completed_at, b.cancelled_at, b.cancelled_reason, b.reminder_sent_at, b.active_slot_id, b.created_at, b.updated_at,
        sv.name             AS service_name,
        sv.slug             AS service_slug,
        sv.duration_minutes AS service_duration_minutes,
@@ -296,6 +303,8 @@ type GetBookingAdminDetailRow struct {
 	CustomerName           string         `json:"customer_name"`
 	CustomerPhone          string         `json:"customer_phone"`
 	CustomerAddress        sql.NullString `json:"customer_address"`
+	Latitude               sql.NullString `json:"latitude"`
+	Longitude              sql.NullString `json:"longitude"`
 	Notes                  sql.NullString `json:"notes"`
 	PriceAmount            string         `json:"price_amount"`
 	Status                 BookingsStatus `json:"status"`
@@ -340,6 +349,8 @@ func (q *Queries) GetBookingAdminDetail(ctx context.Context, id int64) (GetBooki
 		&i.CustomerName,
 		&i.CustomerPhone,
 		&i.CustomerAddress,
+		&i.Latitude,
+		&i.Longitude,
 		&i.Notes,
 		&i.PriceAmount,
 		&i.Status,
@@ -371,7 +382,7 @@ func (q *Queries) GetBookingAdminDetail(ctx context.Context, id int64) (GetBooki
 }
 
 const getBookingByCode = `-- name: GetBookingByCode :one
-SELECT id, booking_code, user_id, service_id, slot_id, customer_name, customer_phone, customer_address, notes, price_amount, status, expires_at, confirmed_at, completed_at, cancelled_at, cancelled_reason, reminder_sent_at, active_slot_id, created_at, updated_at FROM bookings WHERE booking_code = ? LIMIT 1
+SELECT id, booking_code, user_id, service_id, slot_id, customer_name, customer_phone, customer_address, latitude, longitude, notes, price_amount, status, expires_at, confirmed_at, completed_at, cancelled_at, cancelled_reason, reminder_sent_at, active_slot_id, created_at, updated_at FROM bookings WHERE booking_code = ? LIMIT 1
 `
 
 func (q *Queries) GetBookingByCode(ctx context.Context, bookingCode string) (Booking, error) {
@@ -386,6 +397,8 @@ func (q *Queries) GetBookingByCode(ctx context.Context, bookingCode string) (Boo
 		&i.CustomerName,
 		&i.CustomerPhone,
 		&i.CustomerAddress,
+		&i.Latitude,
+		&i.Longitude,
 		&i.Notes,
 		&i.PriceAmount,
 		&i.Status,
@@ -403,7 +416,7 @@ func (q *Queries) GetBookingByCode(ctx context.Context, bookingCode string) (Boo
 }
 
 const getBookingByCodeForUpdate = `-- name: GetBookingByCodeForUpdate :one
-SELECT id, booking_code, user_id, service_id, slot_id, customer_name, customer_phone, customer_address, notes, price_amount, status, expires_at, confirmed_at, completed_at, cancelled_at, cancelled_reason, reminder_sent_at, active_slot_id, created_at, updated_at FROM bookings WHERE booking_code = ? FOR UPDATE
+SELECT id, booking_code, user_id, service_id, slot_id, customer_name, customer_phone, customer_address, latitude, longitude, notes, price_amount, status, expires_at, confirmed_at, completed_at, cancelled_at, cancelled_reason, reminder_sent_at, active_slot_id, created_at, updated_at FROM bookings WHERE booking_code = ? FOR UPDATE
 `
 
 func (q *Queries) GetBookingByCodeForUpdate(ctx context.Context, bookingCode string) (Booking, error) {
@@ -418,6 +431,8 @@ func (q *Queries) GetBookingByCodeForUpdate(ctx context.Context, bookingCode str
 		&i.CustomerName,
 		&i.CustomerPhone,
 		&i.CustomerAddress,
+		&i.Latitude,
+		&i.Longitude,
 		&i.Notes,
 		&i.PriceAmount,
 		&i.Status,
@@ -436,7 +451,8 @@ func (q *Queries) GetBookingByCodeForUpdate(ctx context.Context, bookingCode str
 
 const getBookingDetailByCode = `-- name: GetBookingDetailByCode :one
 SELECT b.id, b.booking_code, b.user_id, b.service_id, b.slot_id,
-       b.customer_name, b.customer_phone, b.customer_address, b.notes,
+       b.customer_name, b.customer_phone, b.customer_address,
+       b.latitude, b.longitude, b.notes,
        b.price_amount, b.status, b.expires_at, b.cancelled_reason,
        b.created_at, b.updated_at,
        sv.name       AS service_name,
@@ -462,6 +478,8 @@ type GetBookingDetailByCodeRow struct {
 	CustomerName     string         `json:"customer_name"`
 	CustomerPhone    string         `json:"customer_phone"`
 	CustomerAddress  sql.NullString `json:"customer_address"`
+	Latitude         sql.NullString `json:"latitude"`
+	Longitude        sql.NullString `json:"longitude"`
 	Notes            sql.NullString `json:"notes"`
 	PriceAmount      string         `json:"price_amount"`
 	Status           BookingsStatus `json:"status"`
@@ -492,6 +510,8 @@ func (q *Queries) GetBookingDetailByCode(ctx context.Context, bookingCode string
 		&i.CustomerName,
 		&i.CustomerPhone,
 		&i.CustomerAddress,
+		&i.Latitude,
+		&i.Longitude,
 		&i.Notes,
 		&i.PriceAmount,
 		&i.Status,
@@ -511,7 +531,7 @@ func (q *Queries) GetBookingDetailByCode(ctx context.Context, bookingCode string
 }
 
 const getBookingForUpdate = `-- name: GetBookingForUpdate :one
-SELECT id, booking_code, user_id, service_id, slot_id, customer_name, customer_phone, customer_address, notes, price_amount, status, expires_at, confirmed_at, completed_at, cancelled_at, cancelled_reason, reminder_sent_at, active_slot_id, created_at, updated_at FROM bookings WHERE id = ? FOR UPDATE
+SELECT id, booking_code, user_id, service_id, slot_id, customer_name, customer_phone, customer_address, latitude, longitude, notes, price_amount, status, expires_at, confirmed_at, completed_at, cancelled_at, cancelled_reason, reminder_sent_at, active_slot_id, created_at, updated_at FROM bookings WHERE id = ? FOR UPDATE
 `
 
 // If this transaction will also change booked_count, take GetSlotForUpdate
@@ -528,6 +548,8 @@ func (q *Queries) GetBookingForUpdate(ctx context.Context, id int64) (Booking, e
 		&i.CustomerName,
 		&i.CustomerPhone,
 		&i.CustomerAddress,
+		&i.Latitude,
+		&i.Longitude,
 		&i.Notes,
 		&i.PriceAmount,
 		&i.Status,
@@ -544,8 +566,41 @@ func (q *Queries) GetBookingForUpdate(ctx context.Context, id int64) (Booking, e
 	return i, err
 }
 
+const getLatestBookingContactByUser = `-- name: GetLatestBookingContactByUser :one
+SELECT customer_phone, customer_address, latitude, longitude
+FROM bookings
+WHERE user_id = ?
+ORDER BY id DESC
+LIMIT 1
+`
+
+type GetLatestBookingContactByUserRow struct {
+	CustomerPhone   string         `json:"customer_phone"`
+	CustomerAddress sql.NullString `json:"customer_address"`
+	Latitude        sql.NullString `json:"latitude"`
+	Longitude       sql.NullString `json:"longitude"`
+}
+
+// What this customer told us last time, to prefill the next booking form with.
+//
+// Any status: a cancelled or expired booking still recorded where this person
+// lives and how to reach them. ORDER BY id, not created_at — id is the primary
+// key and strictly increasing, so two bookings made in the same second cannot
+// tie and pick an arbitrary winner.
+func (q *Queries) GetLatestBookingContactByUser(ctx context.Context, userID int64) (GetLatestBookingContactByUserRow, error) {
+	row := q.db.QueryRowContext(ctx, getLatestBookingContactByUser, userID)
+	var i GetLatestBookingContactByUserRow
+	err := row.Scan(
+		&i.CustomerPhone,
+		&i.CustomerAddress,
+		&i.Latitude,
+		&i.Longitude,
+	)
+	return i, err
+}
+
 const getSlotHoldingBookingForUser = `-- name: GetSlotHoldingBookingForUser :one
-SELECT id, booking_code, user_id, service_id, slot_id, customer_name, customer_phone, customer_address, notes, price_amount, status, expires_at, confirmed_at, completed_at, cancelled_at, cancelled_reason, reminder_sent_at, active_slot_id, created_at, updated_at FROM bookings
+SELECT id, booking_code, user_id, service_id, slot_id, customer_name, customer_phone, customer_address, latitude, longitude, notes, price_amount, status, expires_at, confirmed_at, completed_at, cancelled_at, cancelled_reason, reminder_sent_at, active_slot_id, created_at, updated_at FROM bookings
 WHERE slot_id = ? AND user_id = ? AND status NOT IN ('cancelled', 'expired')
 LIMIT 1
 `
@@ -570,6 +625,8 @@ func (q *Queries) GetSlotHoldingBookingForUser(ctx context.Context, arg GetSlotH
 		&i.CustomerName,
 		&i.CustomerPhone,
 		&i.CustomerAddress,
+		&i.Latitude,
+		&i.Longitude,
 		&i.Notes,
 		&i.PriceAmount,
 		&i.Status,
@@ -894,7 +951,8 @@ func (q *Queries) ListBookingsByUser(ctx context.Context, arg ListBookingsByUser
 
 const listBookingsForExport = `-- name: ListBookingsForExport :many
 SELECT b.id, b.booking_code, b.status, b.customer_name, b.customer_phone,
-       b.customer_address, b.notes, b.price_amount, b.created_at,
+       b.customer_address, b.latitude, b.longitude,
+       b.notes, b.price_amount, b.created_at,
        b.confirmed_at, b.completed_at, b.cancelled_at, b.cancelled_reason,
        sv.name       AS service_name,
        sl.slot_date  AS slot_date,
@@ -935,6 +993,8 @@ type ListBookingsForExportRow struct {
 	CustomerName    string         `json:"customer_name"`
 	CustomerPhone   string         `json:"customer_phone"`
 	CustomerAddress sql.NullString `json:"customer_address"`
+	Latitude        sql.NullString `json:"latitude"`
+	Longitude       sql.NullString `json:"longitude"`
 	Notes           sql.NullString `json:"notes"`
 	PriceAmount     string         `json:"price_amount"`
 	CreatedAt       time.Time      `json:"created_at"`
@@ -980,6 +1040,8 @@ func (q *Queries) ListBookingsForExport(ctx context.Context, arg ListBookingsFor
 			&i.CustomerName,
 			&i.CustomerPhone,
 			&i.CustomerAddress,
+			&i.Latitude,
+			&i.Longitude,
 			&i.Notes,
 			&i.PriceAmount,
 			&i.CreatedAt,

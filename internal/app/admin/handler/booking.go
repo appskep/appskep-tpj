@@ -396,7 +396,7 @@ func (h *Booking) Export(w http.ResponseWriter, r *http.Request) {
 	records := make([][]string, 0, len(rows)+1)
 	records = append(records, []string{
 		"Kode", "Status", "Layanan", "Tanggal", "Mulai", "Selesai",
-		"Nama", "Telepon", "Alamat", "Catatan", "Harga",
+		"Nama", "Telepon", "Alamat", "Latitude", "Longitude", "Catatan", "Harga",
 		"Akun", "Email", "Dibuat", "Dikonfirmasi", "Selesai", "Dibatalkan", "Alasan",
 	})
 	for _, b := range rows {
@@ -410,6 +410,11 @@ func (h *Booking) Export(w http.ResponseWriter, r *http.Request) {
 			b.CustomerName,
 			b.CustomerPhone,
 			b.CustomerAddress.String,
+			// Two columns rather than one "lat,lng" cell: a spreadsheet can sort,
+			// map or feed either to a route planner, and a comma inside a cell is
+			// the thing CSV readers most often get wrong.
+			b.Latitude.String,
+			b.Longitude.String,
 			b.Notes.String,
 			b.PriceAmount,
 			b.UserName,

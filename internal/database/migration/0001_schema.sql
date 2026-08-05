@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS users (
   name            VARCHAR(150)         NOT NULL,
   phone           VARCHAR(30)          NULL,
   address         VARCHAR(500)         NULL,
+  -- The customer's default map pin, WGS84 degrees. Both NULL or both set — the
+  -- pair is written together by service.Profile and never separately, so a half
+  -- located user cannot exist. See bookings.latitude for the precision note.
+  latitude        DECIMAL(9,7)         NULL,
+  longitude       DECIMAL(10,7)        NULL,
   avatar_path     VARCHAR(255)         NULL,
   role            ENUM('user','admin') NOT NULL DEFAULT 'user',
   is_active       TINYINT(1)           NOT NULL DEFAULT 1,
@@ -153,6 +158,21 @@ CREATE TABLE IF NOT EXISTS bookings (
   customer_name    VARCHAR(150)  NOT NULL,
   customer_phone   VARCHAR(30)   NOT NULL,
   customer_address VARCHAR(500)  NULL,
+  -- Where the therapist is actually going, as a map pin. Optional: the browser
+  -- can refuse geolocation and the customer can decline to place one, so
+  -- customer_address above stays the authoritative destination and this is the
+  -- precision on top of it.
+  --
+  -- WGS84 degrees. Latitude is ±90 so 2 integer digits suffice, longitude is
+  -- ±180 and needs 3 — hence the differing precisions. 7 decimal places is
+  -- roughly a centimetre, which is far past what a phone's GPS can resolve and
+  -- costs nothing to keep.
+  --
+  -- Both NULL or both set. That is enforced in service.coordinatePair rather
+  -- than by a CHECK: the pair is parsed, range-checked and written as a unit, so
+  -- a half-written pin never reaches the engine to be refused.
+  latitude         DECIMAL(9,7)  NULL,
+  longitude        DECIMAL(10,7) NULL,
   notes            VARCHAR(500)  NULL,
   -- Snapshot of services.price at booking time. A later price change must never
   -- alter what a past customer owes.

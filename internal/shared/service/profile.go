@@ -41,6 +41,11 @@ func NewProfile(store *repository.Store, avatars *upload.ImageStore) *Profile {
 type ProfileInput struct {
 	Phone   string
 	Address string
+	// Latitude and Longitude are the saved map pin, written by the same widget the
+	// booking form uses. Optional, and both or neither — clearing the pin submits
+	// two empty strings and stores two NULLs.
+	Latitude  string
+	Longitude string
 	// Avatar is nil when no file was chosen. An empty file input still produces a
 	// multipart part, so the handler checks Size before setting this.
 	Avatar *multipart.FileHeader
@@ -79,7 +84,8 @@ func (p *Profile) Update(ctx context.Context, userID int64, in ProfileInput) (mo
 	phone := strings.TrimSpace(in.Phone)
 	address := strings.TrimSpace(in.Address)
 
-	if ve := validateProfile(phone, address); ve != nil {
+	lat, lng, ve := validateProfile(phone, address, in.Latitude, in.Longitude)
+	if ve != nil {
 		return model.User{}, ve
 	}
 
@@ -109,9 +115,11 @@ func (p *Profile) Update(ctx context.Context, userID int64, in ProfileInput) (mo
 
 	err = p.store.WithTx(ctx, func(q *sqlc.Queries) error {
 		if err := q.UpdateUserProfile(ctx, sqlc.UpdateUserProfileParams{
-			Phone:   nullString(phone),
-			Address: nullString(address),
-			ID:      userID,
+			Phone:     nullString(phone),
+			Address:   nullString(address),
+			Latitude:  lat,
+			Longitude: lng,
+			ID:        userID,
 		}); err != nil {
 			return fmt.Errorf("updating profile for user %d: %w", userID, err)
 		}
@@ -149,7 +157,7 @@ func (p *Profile) Update(ctx context.Context, userID int64, in ProfileInput) (mo
 // the phone-shape helpers are the booking form's, so a number accepted on one
 // page cannot be rejected on the other — users.phone and users.address have the
 // same widths as their bookings counterparts.
-func validateProfile(phoneValue, address string) *ValidationError {
+func validateProfile(phoneValue, address, lat, lng string) (sql.NullString, sql.NullString, *ValidationError) {
 	ve := NewValidationError()
 
 	if phoneValue != "" && maxLen(ve, "telepon", "Nomor telepon", phoneValue, maxCustomerPhoneLen) {
@@ -158,10 +166,14 @@ func validateProfile(phoneValue, address string) *ValidationError {
 
 	maxLen(ve, "alamat", "Alamat", address, maxCustomerAddressLen)
 
+	// Optional here as on the booking form, and the same helper, so a pin dropped
+	// while booking is never refused when saved as the profile default.
+	latitude, longitude := coordinatePair(ve, lat, lng)
+
 	if ve.Any() {
-		return ve
+		return sql.NullString{}, sql.NullString{}, ve
 	}
-	return nil
+	return latitude, longitude, nil
 }
 
 // saveAvatar stores an uploaded file, translating the uploader's errors into

@@ -164,7 +164,13 @@ type BookingInput struct {
 	Name    string
 	Phone   string
 	Address string
-	Notes   string
+	// Latitude and Longitude are the map pin, and are the one pair here with NO
+	// default: the pin is optional on the form, so a fixture that did not ask for
+	// one must produce a booking without one — that is the ordinary case and the
+	// one most code paths have to handle.
+	Latitude  string
+	Longitude string
+	Notes     string
 }
 
 // Booking creates a booking through service.Booking.Create.
@@ -198,6 +204,8 @@ func (e *Env) Booking(in BookingInput) sqlc.Booking {
 		Name:        in.Name,
 		Phone:       in.Phone,
 		Address:     in.Address,
+		Latitude:    in.Latitude,
+		Longitude:   in.Longitude,
 		Notes:       in.Notes,
 	})
 	if err != nil {

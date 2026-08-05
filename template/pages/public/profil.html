@@ -112,6 +112,13 @@
           <p class="mt-1.5 text-xs text-ink-faint">Dipakai sebagai alamat kunjungan terapis. Bisa kamu ganti saat booking.</p>
         {{end}}
       </div>
+
+      {{/* The same widget the booking form uses, from partials/map-picker.html —
+           one implementation, so a pin dropped here and a pin dropped while
+           booking behave and validate identically. */}}
+      <div class="mt-5">
+        {{template "map_picker" .Data.Location}}
+      </div>
     </section>
 
     <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

@@ -42,6 +42,8 @@ var configKeys = []string{
 	"MIDTRANS_ENABLED_PAYMENTS", "PAYMENT_EXPIRY_MINUTES", "MIDTRANS_TIMEOUT",
 	"SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD",
 	"SMTP_FROM_NAME", "SMTP_FROM_EMAIL", "SMTP_TIMEOUT",
+	"MAP_TILE_URL", "MAP_TILE_ATTRIBUTION",
+	"MAP_DEFAULT_LAT", "MAP_DEFAULT_LNG", "MAP_DEFAULT_ZOOM",
 }
 
 // setMinimum clears every configuration variable and then sets only the values
@@ -303,6 +305,30 @@ func TestLoadValidation(t *testing.T) {
 			name: "trusted proxies with one bad entry", key: "TRUSTED_PROXIES",
 			value: "10.0.0.0/8,garbage", want: "TRUSTED_PROXIES",
 		},
+		{
+			// The CSP's img-src is derived from this value, so a URL no origin can
+			// be taken from must not reach a header. Everything wrong with the map
+			// fails silently at runtime — a blank grey square in the browser and
+			// nothing at all in the server log — which is why all of it is checked
+			// at boot instead.
+			name: "tile url with no host", key: "MAP_TILE_URL",
+			value: "{z}/{x}/{y}.png", want: "MAP_TILE_URL",
+		},
+		{
+			name: "tile url with no scheme", key: "MAP_TILE_URL",
+			value: "tile.example.org/{z}/{x}/{y}.png", want: "MAP_TILE_URL",
+		},
+		{
+			// A template missing a placeholder is a valid URL that fetches the same
+			// tile forever, so nothing errors anywhere.
+			name: "tile url missing {y}", key: "MAP_TILE_URL",
+			value: "https://tile.example.org/{z}/{x}.png", want: "MAP_TILE_URL",
+		},
+		{name: "latitude out of range", key: "MAP_DEFAULT_LAT", value: "91", want: "MAP_DEFAULT_LAT"},
+		{name: "latitude not a number", key: "MAP_DEFAULT_LAT", value: "yogya", want: "MAP_DEFAULT_LAT"},
+		{name: "longitude out of range", key: "MAP_DEFAULT_LNG", value: "-181", want: "MAP_DEFAULT_LNG"},
+		{name: "zoom of zero", key: "MAP_DEFAULT_ZOOM", value: "0", want: "MAP_DEFAULT_ZOOM"},
+		{name: "zoom past what tiles exist for", key: "MAP_DEFAULT_ZOOM", value: "25", want: "MAP_DEFAULT_ZOOM"},
 	}
 
 	for _, tc := range tests {
@@ -371,6 +397,63 @@ func TestLoadProductionRequiresMoreSecrets(t *testing.T) {
 			t.Error("the session cookie is not Secure in production")
 		}
 	})
+}
+
+// TestMapTileCSPSource. The Content-Security-Policy's img-src is built from
+// MAP_TILE_URL at boot, so this function decides whether the tiles load at all.
+// Getting it wrong is a blank grey map and a console warning — invisible to
+// curl, invisible to the server log, and the reason this is derived from the
+// setting rather than written out beside it.
+func TestMapTileCSPSource(t *testing.T) {
+	tests := []struct {
+		name    string
+		tileURL string
+		want    string
+	}{
+		{
+			// The default. {s} is Leaflet's subdomain rotation, so the source has
+			// to be a wildcard or two thirds of the tiles are refused — a map that
+			// loads in patches, which reads as a network problem rather than a
+			// policy one.
+			name:    "the openstreetmap default",
+			tileURL: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+			want:    "https://*.tile.openstreetmap.org",
+		},
+		{
+			name:    "a provider with no subdomain rotation",
+			tileURL: "https://tiles.example.org/{z}/{x}/{y}.png",
+			want:    "https://tiles.example.org",
+		},
+		{
+			// An API key in the query string must not end up in a header.
+			name:    "a key in the query string is dropped",
+			tileURL: "https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=SECRET",
+			want:    "https://api.maptiler.com",
+		},
+		{
+			name:    "a port is part of the origin",
+			tileURL: "http://localhost:8081/{z}/{x}/{y}.png",
+			want:    "http://localhost:8081",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			setMinimum(t)
+			t.Setenv("MAP_TILE_URL", tc.tileURL)
+
+			cfg, err := config.Load()
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if got := cfg.Map.TileCSPSource(); got != tc.want {
+				t.Errorf("TileCSPSource() = %q, want %q", got, tc.want)
+			}
+			if strings.Contains(cfg.Map.TileCSPSource(), "SECRET") {
+				t.Error("the tile URL's query string leaked into the CSP source")
+			}
+		})
+	}
 }
 
 // TestLoadReportsEveryProblemAtOnce: validate accumulates rather than returning

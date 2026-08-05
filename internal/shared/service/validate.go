@@ -1,6 +1,12 @@
 package service
 
-import "fmt"
+import (
+	"database/sql"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+)
 
 // The primitives every validator in this package was repeating.
 //
@@ -86,4 +92,64 @@ func phone(ve *ValidationError, field, value string) bool {
 		return false
 	}
 	return true
+}
+
+// The map pin, shared by the booking form and the profile form for the same
+// reason phone is: a location accepted while booking must not be rejected when
+// saved to the profile, and one implementation is the only way to guarantee it.
+
+const (
+	// coordFieldKey is the ValidationError key every coordinate message uses.
+	//
+	// Not "latitude"/"longitude": those are hidden inputs written by the map
+	// widget, and a message keyed to one has nowhere to render. "lokasi" names
+	// the visible map card, which is where the message goes — the same reasoning
+	// that promotes layanan and slot errors to the page notice.
+	coordFieldKey = "lokasi"
+
+	// coordDecimals matches DECIMAL(9,7)/DECIMAL(10,7) in the schema. Formatting
+	// to it here rather than letting MariaDB round means the value validated is
+	// byte-for-byte the value stored, and a re-rendered form shows what will be
+	// written rather than what was typed.
+	coordDecimals = 7
+
+	maxLatitude  = 90.0
+	maxLongitude = 180.0
+)
+
+// coordinate parses one WGS84 degree value and returns it normalised.
+//
+// The map widget writes this field, never a human, so anything unparseable is a
+// tampered or truncated hidden input rather than a typo — which is why all three
+// failures share one message rather than explaining the distinction to someone
+// who never typed it.
+func coordinate(value string, limit float64) (string, bool) {
+	f, err := strconv.ParseFloat(value, 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || math.Abs(f) > limit {
+		return "", false
+	}
+	return strconv.FormatFloat(f, 'f', coordDecimals, 64), true
+}
+
+// coordinatePair validates latitude and longitude together and returns them
+// ready to write.
+//
+// Both or neither. The pin is optional everywhere it appears, so two empty
+// strings are a valid answer meaning "not provided" — but half a pin is not a
+// location, and letting one through would put a row in the database that no
+// page can render and no therapist can drive to.
+func coordinatePair(ve *ValidationError, lat, lng string) (sql.NullString, sql.NullString) {
+	lat, lng = strings.TrimSpace(lat), strings.TrimSpace(lng)
+	if lat == "" && lng == "" {
+		return sql.NullString{}, sql.NullString{}
+	}
+
+	normLat, latOK := coordinate(lat, maxLatitude)
+	normLng, lngOK := coordinate(lng, maxLongitude)
+	if !latOK || !lngOK {
+		ve.Add(coordFieldKey, "Titik lokasi tidak valid. Coba deteksi ulang atau geser pin di peta.")
+		return sql.NullString{}, sql.NullString{}
+	}
+
+	return sql.NullString{String: normLat, Valid: true}, sql.NullString{String: normLng, Valid: true}
 }

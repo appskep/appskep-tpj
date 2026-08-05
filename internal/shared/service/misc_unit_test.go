@@ -216,7 +216,7 @@ func TestValidateProfile(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ve := validateProfile(tc.phoneIn, tc.address)
+			_, _, ve := validateProfile(tc.phoneIn, tc.address, "", "")
 
 			if tc.field == "" {
 				if ve != nil {
@@ -245,7 +245,7 @@ func TestProfileAndBookingAgreeAboutPhoneNumbers(t *testing.T) {
 		bookingVE := NewValidationError()
 		phone(bookingVE, "telepon", n)
 
-		profileVE := validateProfile(n, "")
+		_, _, profileVE := validateProfile(n, "", "", "")
 
 		if bookingVE.Any() != (profileVE != nil) {
 			t.Errorf("%q: the booking form and the profile form disagree "+

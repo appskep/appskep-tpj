@@ -13,9 +13,10 @@
 -- name: CreateBooking :execresult
 -- active_slot_id is a generated column and must not appear in the column list.
 INSERT INTO bookings (booking_code, user_id, service_id, slot_id,
-                      customer_name, customer_phone, customer_address, notes,
+                      customer_name, customer_phone, customer_address,
+                      latitude, longitude, notes,
                       price_amount, status, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_payment', ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_payment', ?);
 
 -- name: GetBooking :one
 SELECT * FROM bookings WHERE id = ? LIMIT 1;
@@ -46,7 +47,8 @@ LIMIT 1;
 -- The konfirmasi / pembayaran pages: everything needed to render in one round
 -- trip.
 SELECT b.id, b.booking_code, b.user_id, b.service_id, b.slot_id,
-       b.customer_name, b.customer_phone, b.customer_address, b.notes,
+       b.customer_name, b.customer_phone, b.customer_address,
+       b.latitude, b.longitude, b.notes,
        b.price_amount, b.status, b.expires_at, b.cancelled_reason,
        b.created_at, b.updated_at,
        sv.name       AS service_name,
@@ -60,6 +62,19 @@ FROM bookings b
 JOIN services       sv ON sv.id = b.service_id
 JOIN schedule_slots sl ON sl.id = b.slot_id
 WHERE b.booking_code = ?
+LIMIT 1;
+
+-- name: GetLatestBookingContactByUser :one
+-- What this customer told us last time, to prefill the next booking form with.
+--
+-- Any status: a cancelled or expired booking still recorded where this person
+-- lives and how to reach them. ORDER BY id, not created_at — id is the primary
+-- key and strictly increasing, so two bookings made in the same second cannot
+-- tie and pick an arbitrary winner.
+SELECT customer_phone, customer_address, latitude, longitude
+FROM bookings
+WHERE user_id = ?
+ORDER BY id DESC
 LIMIT 1;
 
 -- ---------------------------------------------------------------------------
@@ -256,7 +271,8 @@ WHERE FIND_IN_SET(CAST(b.status AS CHAR), sqlc.arg(status_list)) > 0
 -- The CSV export. Same predicate as the list, no OFFSET, and a LIMIT the service
 -- sets so an export cannot pull an unbounded result set into memory.
 SELECT b.id, b.booking_code, b.status, b.customer_name, b.customer_phone,
-       b.customer_address, b.notes, b.price_amount, b.created_at,
+       b.customer_address, b.latitude, b.longitude,
+       b.notes, b.price_amount, b.created_at,
        b.confirmed_at, b.completed_at, b.cancelled_at, b.cancelled_reason,
        sv.name       AS service_name,
        sl.slot_date  AS slot_date,

@@ -111,6 +111,13 @@ type Querier interface {
 	// If this transaction will also change booked_count, take GetSlotForUpdate
 	// first (see the lock order note in schedules.sql).
 	GetBookingForUpdate(ctx context.Context, id int64) (Booking, error)
+	// What this customer told us last time, to prefill the next booking form with.
+	//
+	// Any status: a cancelled or expired booking still recorded where this person
+	// lives and how to reach them. ORDER BY id, not created_at — id is the primary
+	// key and strictly increasing, so two bookings made in the same second cannot
+	// tie and pick an arbitrary winner.
+	GetLatestBookingContactByUser(ctx context.Context, userID int64) (GetLatestBookingContactByUserRow, error)
 	GetLatestPaymentForBooking(ctx context.Context, bookingID int64) (Payment, error)
 	GetPayment(ctx context.Context, id int64) (Payment, error)
 	GetPaymentAdminDetail(ctx context.Context, id int64) (GetPaymentAdminDetailRow, error)
@@ -369,6 +376,9 @@ type Querier interface {
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) error
 	// Only the locally-owned fields. name and email belong to Appskep and are
 	// refreshed from the JWT on each login.
+	//
+	// latitude and longitude move as a pair, always both, so clearing the map pin
+	// cannot leave half of one behind.
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) error
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 	// Called on every login. Refreshes the Appskep-owned fields and stamps the

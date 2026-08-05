@@ -104,7 +104,13 @@ type CreateInput struct {
 	Name        string
 	Phone       string
 	Address     string
-	Notes       string
+	// Latitude and Longitude are the map pin, and are optional: they come from
+	// hidden inputs the map widget writes, and a browser that refuses geolocation
+	// or a customer who never touches the map both submit them empty. Address
+	// remains the destination of record.
+	Latitude  string
+	Longitude string
+	Notes     string
 }
 
 // parsedBooking is a validated CreateInput, carrying the rows the form resolved
@@ -114,12 +120,14 @@ type CreateInput struct {
 // re-reads both inside the transaction and trusts only what it finds there;
 // these copies exist to render the review panel.
 type parsedBooking struct {
-	service sqlc.Service
-	slot    sqlc.ScheduleSlot
-	name    string
-	phone   string
-	address sql.NullString
-	notes   sql.NullString
+	service   sqlc.Service
+	slot      sqlc.ScheduleSlot
+	name      string
+	phone     string
+	address   sql.NullString
+	latitude  sql.NullString
+	longitude sql.NullString
+	notes     sql.NullString
 }
 
 // AvailableDate is one date the picker may offer.
@@ -378,6 +386,41 @@ func (b *Booking) Held(ctx context.Context, slotID, userID int64) (bool, error) 
 	return true, nil
 }
 
+// BookingContact is what a previous order can lend to the next one.
+//
+// Strings throughout, including the coordinates: they arrive as DECIMAL and go
+// straight back into a form field, and routing them through float64 would be a
+// rounding step with nothing to gain from it — the same rule money follows.
+type BookingContact struct {
+	Phone     string
+	Address   string
+	Latitude  string
+	Longitude string
+}
+
+// LastContact returns the contact data from this user's most recent booking, or
+// a zero value when they have never made one.
+//
+// A first-time customer is not an error. The caller uses this to fill in the
+// blanks the profile left, so "nothing to lend" and "here is what to lend" are
+// the same outcome to it, and only a real infrastructure failure is worth
+// reporting.
+func (b *Booking) LastContact(ctx context.Context, userID int64) (BookingContact, error) {
+	row, err := b.store.Queries.GetLatestBookingContactByUser(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return BookingContact{}, nil
+	}
+	if err != nil {
+		return BookingContact{}, fmt.Errorf("getting latest booking contact for user %d: %w", userID, err)
+	}
+	return BookingContact{
+		Phone:     row.CustomerPhone,
+		Address:   row.CustomerAddress.String,
+		Latitude:  row.Latitude.String,
+		Longitude: row.Longitude.String,
+	}, nil
+}
+
 // DetailForUser returns one booking with its layanan and slot joined in, for the
 // pembayaran and konfirmasi pages.
 //
@@ -482,6 +525,9 @@ func (b *Booking) validate(ctx context.Context, in CreateInput) (parsedBooking, 
 	if requiredMaxLen(ve, "alamat", "Alamat", addr, maxCustomerAddressLen) {
 		p.address = sql.NullString{String: addr, Valid: true}
 	}
+
+	// Titik lokasi — optional, and both halves or neither.
+	p.latitude, p.longitude = coordinatePair(ve, in.Latitude, in.Longitude)
 
 	// Catatan — optional.
 	if notes := strings.TrimSpace(in.Notes); notes != "" {
@@ -630,6 +676,8 @@ func (b *Booking) create(ctx context.Context, userID int64, p parsedBooking) (sq
 			CustomerName:    p.name,
 			CustomerPhone:   p.phone,
 			CustomerAddress: p.address,
+			Latitude:        p.latitude,
+			Longitude:       p.longitude,
 			Notes:           p.notes,
 			PriceAmount:     svc.Price,
 			ExpiresAt:       sql.NullTime{Time: expiresAt, Valid: true},

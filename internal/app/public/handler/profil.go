@@ -46,6 +46,30 @@ const (
 type profilFormValues struct {
 	Telepon string
 	Alamat  string
+	// Written by the map widget, empty when no pin is saved. Strings the whole
+	// way, for the same reason bookingFormValues carries them as strings.
+	Latitude  string
+	Longitude string
+}
+
+// profilFormFromUser is the stored profile as form values.
+//
+// A function rather than three struct literals: Show and both of Save's failure
+// paths rebuild this, and the 413 branch in particular is written before any
+// form parsing has happened, so a field added here and forgotten there would
+// silently blank the user's saved pin on an oversized upload.
+func profilFormFromUser(u model.User) profilFormValues {
+	return profilFormValues{
+		Telepon:   u.Phone,
+		Alamat:    u.Address,
+		Latitude:  u.Latitude,
+		Longitude: u.Longitude,
+	}
+}
+
+// HasLocation reports whether a pin is saved. Both halves, as everywhere else.
+func (v profilFormValues) HasLocation() bool {
+	return v.Latitude != "" && v.Longitude != ""
 }
 
 type profilData struct {
@@ -57,6 +81,9 @@ type profilData struct {
 	// HasAvatar decides between the image and the initial fallback, and whether
 	// the "hapus foto" control has anything to remove.
 	HasAvatar bool
+	// Location is the map_picker partial's payload, filled by render from Form
+	// and Errors so none of the four call sites can forget it.
+	Location locationPicker
 }
 
 // Show renders the profile form.
@@ -71,7 +98,7 @@ func (h *Profil) Show(w http.ResponseWriter, r *http.Request) {
 
 	h.render(w, r, http.StatusOK, profilData{
 		User:      *user,
-		Form:      profilFormValues{Telepon: user.Phone, Alamat: user.Address},
+		Form:      profilFormFromUser(*user),
 		HasAvatar: user.AvatarPath != "",
 	})
 }
@@ -100,7 +127,7 @@ func (h *Profil) Save(w http.ResponseWriter, r *http.Request) {
 		h.deps.Log.InfoContext(r.Context(), "profil: rejected form body", slog.Any("error", err))
 		h.render(w, r, http.StatusRequestEntityTooLarge, profilData{
 			User:      *user,
-			Form:      profilFormValues{Telepon: user.Phone, Alamat: user.Address},
+			Form:      profilFormFromUser(*user),
 			HasAvatar: user.AvatarPath != "",
 			Errors: map[string]string{
 				avatarFieldName: "Ukuran unggahan terlalu besar. Maksimal 1 MB.",
@@ -110,13 +137,17 @@ func (h *Profil) Save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	values := profilFormValues{
-		Telepon: r.PostFormValue("telepon"),
-		Alamat:  r.PostFormValue("alamat"),
+		Telepon:   r.PostFormValue("telepon"),
+		Alamat:    r.PostFormValue("alamat"),
+		Latitude:  r.PostFormValue("latitude"),
+		Longitude: r.PostFormValue("longitude"),
 	}
 
 	in := service.ProfileInput{
 		Phone:        values.Telepon,
 		Address:      values.Alamat,
+		Latitude:     values.Latitude,
+		Longitude:    values.Longitude,
 		RemoveAvatar: r.PostFormValue("remove_avatar") == "1",
 	}
 
@@ -167,6 +198,10 @@ func (h *Profil) formError(
 }
 
 func (h *Profil) render(w http.ResponseWriter, r *http.Request, status int, data profilData) {
+	data.Location = locationPickerFor(h.deps, data.Form.Latitude, data.Form.Longitude,
+		"Dipakai untuk mengisi formulir booking berikutnya. Bisa diubah saat booking.",
+		data.Errors)
+
 	h.deps.View.Render(w, r, status, "public/profil", &view.View{
 		Page: view.Page{
 			Title:       "Profil",

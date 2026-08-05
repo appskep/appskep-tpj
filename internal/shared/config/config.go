@@ -6,6 +6,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/netip"
 	"net/url"
 	"os"
@@ -32,6 +33,7 @@ type Config struct {
 	Session  SessionConfig
 	Midtrans MidtransConfig
 	SMTP     SMTPConfig
+	Map      MapConfig
 }
 
 type ServerConfig struct {
@@ -280,6 +282,67 @@ func (s SMTPConfig) Enabled() bool {
 	return s.Host != "" && s.FromEmail != ""
 }
 
+// MapConfig is the slippy map on the booking and profile forms.
+//
+// The tile server is a setting rather than a constant because it is the one
+// piece of this feature with an operator on the other end of it. The default is
+// OpenStreetMap's public tiles, whose usage policy permits light use with
+// attribution and forbids heavy or bulk use — fine for a booking form, and a
+// production deployment with real traffic should point this at a provider it has
+// an agreement with. Changing it is one env var and no code, which is the whole
+// reason TileURL is read here and the Content-Security-Policy is DERIVED from it
+// rather than written out separately: a hardcoded img-src would block the new
+// host and the map would go blank with nothing in any server log to say why.
+type MapConfig struct {
+	// TileURL is a Leaflet tile template and must carry {z}, {x} and {y}.
+	TileURL string
+	// TileAttribution is the credit line the tile provider requires. Rendered as
+	// text in the map's corner, so it carries no markup.
+	TileAttribution string
+	// DefaultLat, DefaultLng and DefaultZoom are where the map opens when there is
+	// no pin to show and geolocation has not answered — the service area, wide
+	// enough to recognise. Strings for the same reason the columns are: they go
+	// straight into a data attribute and never need arithmetic.
+	DefaultLat  string
+	DefaultLng  string
+	DefaultZoom int
+}
+
+// TileOrigin is the scheme://host the tiles load from, for the CSP's img-src.
+//
+// Empty when TileURL does not parse, which validate() refuses to boot on — so a
+// caller building a header never has to handle that case.
+//
+// The {s} subdomain placeholder is replaced with a literal "a" before parsing:
+// it is not valid in a hostname, and url.Parse would otherwise reject the whole
+// template. The resulting origin covers every subdomain only because the wildcard
+// below puts it back — see the CSP source built in middleware.SecureHeaders.
+func (m MapConfig) TileOrigin() string {
+	u, err := url.Parse(strings.Replace(m.TileURL, "{s}", "a", 1))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// TileCSPSource is TileOrigin with the {s} placeholder turned back into a
+// wildcard, so all of a provider's tile subdomains are admitted by one source.
+func (m MapConfig) TileCSPSource() string {
+	origin := m.TileOrigin()
+	if origin == "" {
+		return ""
+	}
+	if strings.Contains(m.TileURL, "{s}") {
+		u, err := url.Parse(strings.Replace(m.TileURL, "{s}", "a", 1))
+		if err == nil && strings.Contains(u.Host, ".") {
+			// a.tile.openstreetmap.org -> https://*.tile.openstreetmap.org
+			_, rest, _ := strings.Cut(u.Host, ".")
+			return u.Scheme + "://*." + rest
+		}
+	}
+	return origin
+}
+
 // Load reads .env (if present), resolves every setting, and validates the
 // result. A missing .env is not an error — real environments set real env vars.
 func Load() (*Config, error) {
@@ -362,6 +425,17 @@ func Load() (*Config, error) {
 			FromName:  getString("SMTP_FROM_NAME", "Terapi Pemuda Jompo"),
 			FromEmail: getString("SMTP_FROM_EMAIL", ""),
 			Timeout:   getDuration("SMTP_TIMEOUT", 10*time.Second),
+		},
+		Map: MapConfig{
+			TileURL:         getString("MAP_TILE_URL", "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"),
+			TileAttribution: getString("MAP_TILE_ATTRIBUTION", "© OpenStreetMap"),
+			// Yogyakarta, at a zoom that shows the city rather than a street. Only
+			// ever seen by someone who has no pin and has not let the browser locate
+			// them, and it exists so that state is a recognisable place instead of
+			// the Atlantic at 0°,0°.
+			DefaultLat:  getString("MAP_DEFAULT_LAT", "-7.797068"),
+			DefaultLng:  getString("MAP_DEFAULT_LNG", "110.370529"),
+			DefaultZoom: getInt("MAP_DEFAULT_ZOOM", 12),
 		},
 	}
 
@@ -538,6 +612,35 @@ func (c *Config) validate() error {
 		problems = append(problems, "APP_TZ="+c.App.TZ+" observes DST; the fixed-offset "+
 			"session time_zone in DBConfig.DSN would drift — load the MySQL time zone "+
 			"tables and use the zone name instead")
+	}
+
+	// The map. Every one of these fails silently at runtime rather than loudly:
+	// a tile URL the CSP cannot be built from, or one missing a placeholder,
+	// produces a blank grey square on the booking form and nothing at all in the
+	// server log — the browser is the only place that would say so.
+	if c.Map.TileOrigin() == "" {
+		problems = append(problems, "MAP_TILE_URL must be an absolute URL with a scheme and host")
+	}
+	for _, placeholder := range []string{"{z}", "{x}", "{y}"} {
+		if !strings.Contains(c.Map.TileURL, placeholder) {
+			problems = append(problems, "MAP_TILE_URL must contain "+placeholder)
+		}
+	}
+	for _, coord := range []struct {
+		name, value string
+		limit       float64
+	}{
+		{"MAP_DEFAULT_LAT", c.Map.DefaultLat, 90},
+		{"MAP_DEFAULT_LNG", c.Map.DefaultLng, 180},
+	} {
+		f, err := strconv.ParseFloat(coord.value, 64)
+		if err != nil || math.Abs(f) > coord.limit {
+			problems = append(problems, fmt.Sprintf("%s must be a number between -%g and %g",
+				coord.name, coord.limit, coord.limit))
+		}
+	}
+	if c.Map.DefaultZoom < 1 || c.Map.DefaultZoom > 20 {
+		problems = append(problems, "MAP_DEFAULT_ZOOM must be between 1 and 20")
 	}
 
 	if c.IsProduction() {

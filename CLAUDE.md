@@ -25,7 +25,7 @@ before starting work, and tick a task the moment it is executed and verified.
 | `make db-reset` | Drop + create + migrate (destructive, dev only) |
 | `make db-fresh` | `db-reset` + `seed` — **the loop to run after any schema edit** |
 | `make tailwind` / `make tailwind-watch` | Build / watch `static/css/app.css` (downloads the pinned CLI into `.tools/tailwindcss-<version>` on first run) |
-| `make assets` | Re-vendor the icon sprite, fonts and Turbo — only when a version or the icon list changes |
+| `make assets` | Re-vendor the icon sprite, fonts, Turbo and Leaflet — only when a version or the icon list changes |
 
 Server listens on `SERVER_PORT` (default 8080). Health check: `GET /api/health`.
 Payment webhook: `POST /midtrans/notification`.
@@ -73,8 +73,9 @@ the codebase; helpers that would otherwise emit markup return data instead (`sta
 returns a struct, `paragraphs` returns `[]string`).
 
 Frontend: Tailwind v4 via the pinned standalone CLI (no Node, no `tailwind.config.js` —
-tokens are an `@theme` block in `static/css/input.css`). Turbo, the Lucide/Simple-Icons
-sprite and the woff2 fonts are committed under `static/`; `make assets` re-fetches them.
+tokens are an `@theme` block in `static/css/input.css`). Turbo, Leaflet, the
+Lucide/Simple-Icons sprite and the woff2 fonts are committed under `static/`; `make assets`
+re-fetches them.
 
 ## Conventions
 
@@ -209,6 +210,42 @@ One more, found the hard way in Phase 7 and retrofitted to Phase 5:
   form that redirects on success. **curl cannot catch this**: curl is the no-JS path, which
   always worked. Check a POST-then-200 form in a real browser.
 
+### The location picker (settled in Phase 13.5)
+
+- **`html/template` URL-normalises any attribute whose name ends in `url` or `uri`,
+  including `data-*` ones.** `data-map-tile-url` turned Leaflet's `{s}/{z}/{x}/{y}` into
+  `%7bs%7d…` and pointed every tile at a host that does not exist — correct-looking markup,
+  blank grey map, nothing in any log. The attribute is `data-map-tiles` for that reason;
+  `template.URL` does not help, the normaliser runs on that type too. **Never end a data
+  attribute in `url`.**
+- **`turbo:load` does not fire for a frame navigation; `turbo:frame-load` does.** Anything
+  initialised inside a `<turbo-frame>` needs both, an idempotence flag on the element
+  (`dataset.mapReady`) so a second swap does not stack a second instance, and teardown on
+  `turbo:before-cache` that clears the flag. Booking step 3 is only ever reached by a frame
+  swap, so `turbo:load` alone means the map never appears at all.
+- **The CSP's image origins are derived from `MAP_TILE_URL`,** so `SecureHeaders` takes the
+  tile origin as a parameter. A hardcoded host beside a configurable tile server is the same
+  drift the `/api`,`/midtrans` prefix lists warn about, and this one is silent — a refused
+  tile appears only in the browser console. `{s}` becomes a `*.` wildcard or the map loads in
+  patches.
+- **Vendor a library rather than name a third-party script origin.** Google Maps JS would
+  have cost `style-src 'unsafe-inline'` (it injects inline styles; no hash is possible),
+  retiring Phase 12's hash-only policy. Leaflet self-hosted beside `turbo.js` costs one image
+  origin, because a tile is an `<img>` and Leaflet positions its panes through the CSSOM,
+  which CSP does not govern. `leaflet.css` is `@import`ed into `input.css` so it lands inside
+  `app.css` and under `assetVersion`; `leaflet.js` is lazy-loaded by `app.js`, which keeps it
+  off the landing page and avoids racing a Turbo-re-evaluated body script.
+- **Coordinates are `DECIMAL(9,7)`/`DECIMAL(10,7)` and strings in Go**, normalised to 7 dp by
+  the service so the value validated is the value stored — money's rule applied to a value
+  that must round-trip exactly. **Both or neither**, enforced in `coordinatePair` rather than
+  by a CHECK, so half a pin never reaches the engine.
+- **A coordinate error is keyed `lokasi`, not `latitude`** — the inputs are hidden and a
+  message keyed to one has nowhere to render. Same reasoning as promoting `layanan` and
+  `slot` errors to the page notice.
+- **A markup assertion must be scoped to the form it is about.** The confirm form and the map
+  widget both carry `name="latitude"`, so a whole-body assertion passes with the confirm
+  form's inputs deleted — verified by deleting them.
+
 ## Public pages & SEO (settled in Phase 6)
 
 - **A public read goes through the service, not `Store.Queries`.** `Catalog.ListActive`
@@ -249,6 +286,14 @@ One more, found the hard way in Phase 7 and retrofitted to Phase 5:
 - **Someone else's booking is a 404, never a 403,** and the rule lives in
   `Booking.DetailForUser` so the next page that loads a booking inherits it. A 403 confirms
   the code exists.
+- **Prefill is per field and only on the GET.** `users` first, then the customer's last
+  booking for whatever it left blank (`Booking.LastContact`, `sql.ErrNoRows` → zero value,
+  not an error — a first-time customer is the ordinary case). The review POST and the 422
+  re-render must never re-prefill: what was submitted wins, including the fields the user
+  deliberately emptied. A failed lookup is a WARN and an emptier form, never a failed page.
+- **The review panel's confirm form is a separate form and it is the one that writes.** Every
+  value it does not re-post as a hidden input is silently dropped at the commit while the
+  review displayed it. Add a field to step 3 and you have added it in two places.
 - **The expiry ticker is `Deps.RunExpiryTicker`**, started in `main.go` on the signal context.
   `defer wg.Wait()` is registered *before* `defer stop()` so every exit path cancels then waits,
   both ahead of `db.Close()`. `EXPIRY_SWEEP_INTERVAL` defaults to 1m and may not be zero.

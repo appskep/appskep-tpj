@@ -120,6 +120,8 @@ type Booking struct {
 	CustomerName    string         `json:"customer_name"`
 	CustomerPhone   string         `json:"customer_phone"`
 	CustomerAddress sql.NullString `json:"customer_address"`
+	Latitude        sql.NullString `json:"latitude"`
+	Longitude       sql.NullString `json:"longitude"`
 	Notes           sql.NullString `json:"notes"`
 	PriceAmount     string         `json:"price_amount"`
 	Status          BookingsStatus `json:"status"`
@@ -216,6 +218,8 @@ type User struct {
 	Name          string         `json:"name"`
 	Phone         sql.NullString `json:"phone"`
 	Address       sql.NullString `json:"address"`
+	Latitude      sql.NullString `json:"latitude"`
+	Longitude     sql.NullString `json:"longitude"`
 	AvatarPath    sql.NullString `json:"avatar_path"`
 	Role          UsersRole      `json:"role"`
 	IsActive      bool           `json:"is_active"`

@@ -167,7 +167,7 @@ icons: ## Rebuild static/img/icons.svg from lucide + simple-icons (needs network
 fonts: ## Re-download the self-hosted woff2 fonts (needs network)
 	./scripts/build-fonts.sh
 
-js: ## Re-download static/js/turbo.js (needs network)
+js: ## Re-download static/js/turbo.js and Leaflet (needs network)
 	./scripts/build-js.sh
 
 clean: ## Remove build artifacts

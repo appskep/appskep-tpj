@@ -33,6 +33,7 @@ Sistem booking & pembayaran online: **Go monolith + chi + sqlc + MariaDB + Go ht
 | 11 | Notifikasi email | DONE | 2026-07-27. Six transactional emails, an async worker that drains on shutdown, and an H-1 reminder made idempotent by a new `bookings.reminder_sent_at` — the phase's one schema change. Split `mail` (transport) / `service.Email` (rules), mirroring Midtrans. One defect found while writing it (html/template escaping the plain-text part and the Subject header). See **Phase 11 notes** below. **M6 complete** |
 | 12 | Hardening (CSRF, rate limit, validation, errors) | DONE | 2026-07-27. Session-bound CSRF with per-render masking, per-route token buckets over a trusted-proxy client IP, a strict CSP that cost the app its last four inline scripts, a global body cap, and `private, no-store` on authenticated pages. Two defects found by verification (a 403 where a 413 belonged; Turbo's progress-bar stylesheet blocked by `style-src`), and a third on 2026-07-28 (the pay button dead in a browser: Turbo `fetch()`ing a cross-origin 303 into CORS and `connect-src`; `form-action` also had to name the Snap hosts). **`govulncheck`: 30 stdlib findings, all fixed by a toolchain bump — Phase 14 must build on go1.25.12+.** See **Phase 12 notes** below |
 | 13 | Testing | DONE | 2026-07-28. 33 test files, ~250 tests, in three tiers: pure unit beside the code, DB-backed in `internal/integration`, harness in `internal/testsupport`. Every earlier phase's deferred ask is now permanent, including the concurrency test PLAN.md calls the one that matters most. Stdlib `testing` only. Two real defects found (a 500 on an empty webhook body; a predicate named for a rule it did not implement), and three load-bearing tests proven to fail by breaking the code they guard. CI deferred to Phase 14. See **Phase 13 notes** below |
+| 13.5 | Booking form — prefill & lokasi | DONE | 2026-08-05. Two additions to `/booking` step 3, both requested after Phase 13. The phone and address now fall back **per field** to the customer's last booking when the profile is blank, and a Leaflet map with one draggable pin adds optional coordinates carried through to the admin detail page and the CSV. Leaflet vendored beside Turbo rather than Google Maps JS, which would have cost `style-src 'unsafe-inline'`; the CSP's `img-src` is now **derived from `MAP_TILE_URL`** so the two cannot drift. One real defect found by a test (html/template URL-normalising `data-map-tile-url`, which percent-escaped Leaflet's `{s}/{z}/{x}/{y}` into a host that does not exist — correct-looking markup, blank grey map), and one load-bearing test proven to fail by breaking the code it guards. See **Phase 13.5 notes** below |
 | 14 | Deployment & go-live | TODO | |
 
 ---
@@ -1736,6 +1737,89 @@ verified by breaking the code it guards:
 [QA.md](QA.md), because a headless-Chrome dependency is a large thing to maintain for assertions a person makes in
 two minutes; a fake `sqlc.Querier`, which would mean changing service signatures to buy tests that cannot see the
 locking; and property-based testing of the money parsers, where the table already covers every documented rule.
+
+---
+
+## Phase 13.5 — Booking form: prefill & lokasi
+
+Requested after Phase 13, against the last step of the public booking funnel.
+
+- [x] **Phone and address fall back to the previous order when the profile is blank.**
+      `GetLatestBookingContactByUser` → `Booking.LastContact` → `Booking.prefillFromLastBooking`.
+- [x] **An optional map pin**, auto-detected where the browser already allows it, placed by
+      hand otherwise, stored on `bookings` and on `users`.
+- [x] Coordinates on the admin booking detail page and in the CSV export.
+- [x] Unit, integration and config tests; `make test` green.
+
+### Decisions taken
+
+- **Leaflet, vendored, over Google Maps JS.** Picking a point inside the map needs a real
+  SDK, not an Embed iframe — an iframe cannot report a chosen location back. The Maps JS API
+  would then have forced `style-src 'unsafe-inline'` (it injects inline styles; no hash is
+  possible), retiring the Turbo-hash-only policy Phase 12 built, plus four new script,
+  connect and image origins and a billing-enabled key. Leaflet self-hosted beside `turbo.js`
+  costs the CSP exactly one image origin, because the only cross-origin thing left is a tile,
+  and a tile is an `<img>`.
+- **The pin is optional.** `alamat` stays required and remains the destination of record.
+  Geolocation gets denied, times out, or is unavailable on plain http often enough that
+  requiring a pin would kill bookings on the last step of the funnel.
+- **Auto-detect only when permission is already granted.** `navigator.permissions.query`
+  first; otherwise the "Deteksi lokasi saya" button is what asks. Prompting on load would put
+  a permission dialog on step 1, before the customer knows why — and a dismissed prompt is
+  one Chrome may hold against the whole site.
+- **`bookings` and `users` both.** Per-booking snapshot, like `price_amount`, plus a profile
+  default; `/profil` gets the same widget so there is one implementation of the rules.
+
+### Notes — the things that were not obvious
+
+- **`html/template` URL-normalises any attribute whose name ends in `url` or `uri`,
+  `data-*` included.** `data-map-tile-url="https://{s}.tile.../{z}/{x}/{y}.png"` rendered as
+  `%7bs%7d...%7bz%7d`, pointing every tile request at a host that does not exist. The page
+  source looks entirely correct and the map is simply grey. The attribute is now
+  `data-map-tiles`; `template.URL` would not have helped, because the normaliser runs on that
+  type too. Found by an integration test asserting the attribute verbatim, which is why that
+  assertion compares against the configured string rather than checking the attribute exists.
+- **`turbo:load` does not fire for a frame navigation — `turbo:frame-load` does.** Step 3
+  lives inside `booking_jadwal`, so it is only ever reached by a frame swap: without that
+  listener the map never appears at all. It is also the "detect again after choosing a
+  schedule" trigger the request asked for. `dataset.mapReady` stops a second slot pick from
+  stacking a second map, and `destroyMaps` on `turbo:before-cache` clears the flag so a
+  restored snapshot rebuilds rather than showing dead markup.
+- **The CSP's `img-src` is derived from `MAP_TILE_URL`,** so `SecureHeaders` now takes the
+  tile origin. A hardcoded host and a configurable tile server are the same failure mode as
+  the two `/api`,`/midtrans` prefix lists that must agree — except this one is silent, since
+  a blocked tile appears nowhere but the browser console. `{s}` becomes a `*.` wildcard, or
+  two thirds of the tiles are refused and the map loads in patches that read as a network
+  fault.
+- **`Permissions-Policy: geolocation=()` refused the API outright.** It is `(self)` now, and
+  that header is the only one on the list that changed.
+- **`leaflet.css` is `@import`ed into `input.css`, not linked.** `view.assetVersion` hashes
+  `app.css` and nothing else, so a second stylesheet would be served `immutable` for a year
+  with no way to bust it. Its `url(images/…)` references survive the inline because
+  `leaflet.css`, `app.css` and `static/css/images/` are all in the same directory.
+  `leaflet.js` is lazy-loaded from `app.js` instead of a `<script>` tag: no bytes on the
+  landing page, and no race between a Turbo-re-evaluated body script and `app.js`'s
+  `turbo:load` handler.
+- **The review panel's confirm form is a SEPARATE form from the one holding the map.** It
+  re-posts every value as a hidden input, and it is the one that writes — omitting the
+  coordinates there means the review shows a location the commit discards, with no error
+  anywhere. A service-level test calling `Create` never touches that path.
+- **A markup assertion has to be scoped to the form it is about.** The unscoped version of
+  the test above stayed green with the confirm form's inputs deleted, because the map
+  widget's own hidden inputs carry the same two names. Proven by deleting them and watching
+  it pass — then scoping it and watching it fail.
+- **The pin's precision is normalised in the service, not by MariaDB.** `strconv.FormatFloat`
+  to 7 dp, matching `DECIMAL(9,7)`/`DECIMAL(10,7)`, so the value validated is the value
+  stored. `bookingFormValues` still carries the raw submitted strings, per Phase 4's rule that
+  a rejected form re-renders exactly what was sent — so the confirm form re-posts the raw
+  value and `Create` normalises again.
+
+**Left for later, deliberately:** reverse geocoding (pin → address text), which needs a
+geocoding provider, a key and a rate budget while `alamat` is fine as the customer's own
+words; address search on the map; coordinates in the transactional emails, since
+`EmailBookingCreated` addresses the customer, who knows where they live; and moving the map
+defaults into the `settings` table, which would let an operator change them at runtime while
+the CSP header still named the old host.
 
 ---
 

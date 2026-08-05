@@ -188,3 +188,142 @@ func TestValidationError(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// The map pin
+// ---------------------------------------------------------------------------
+
+// TestCoordinate covers the parser alone. The values here are what a hidden
+// input can actually contain — a browser's toFixed output, a truncated value, a
+// tampered one — because no human ever types into this field.
+func TestCoordinate(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		limit float64
+		want  string // "" means: expect a rejection
+	}{
+		// Normalisation to the DECIMAL(_,7) the column holds is the point: the
+		// value validated has to be the value stored, or a re-rendered form and
+		// the database disagree about where the customer is.
+		{name: "trailing zeros added", value: "-7.797068", limit: 90, want: "-7.7970680"},
+		{name: "excess precision truncated", value: "110.37052912345678", limit: 180, want: "110.3705291"},
+		{name: "integer degrees", value: "110", limit: 180, want: "110.0000000"},
+		{name: "zero is a real place", value: "0", limit: 90, want: "0.0000000"},
+
+		{name: "latitude at the pole", value: "90", limit: 90, want: "90.0000000"},
+		{name: "latitude past the pole", value: "90.1", limit: 90},
+		{name: "longitude at the antimeridian", value: "-180", limit: 180, want: "-180.0000000"},
+		{name: "longitude past it", value: "180.0001", limit: 180},
+
+		{name: "empty", value: "", limit: 90},
+		{name: "not a number", value: "dekat masjid", limit: 90},
+		{name: "NaN", value: "NaN", limit: 90},
+		{name: "infinity", value: "Inf", limit: 90},
+		{name: "a pair in one field", value: "-7.79,110.37", limit: 90},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := coordinate(tc.value, tc.limit)
+
+			if tc.want == "" {
+				if ok {
+					t.Fatalf("coordinate(%q) accepted it as %q", tc.value, got)
+				}
+				return
+			}
+			if !ok {
+				t.Fatalf("coordinate(%q) was rejected", tc.value)
+			}
+			if got != tc.want {
+				t.Errorf("coordinate(%q) = %q, want %q", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCoordinatePair states the both-or-neither rule, which is what keeps half a
+// pin — a row no page can render and no therapist can drive to — out of the
+// database. It is enforced here rather than by a CHECK constraint, so this test
+// is the only thing that guards it.
+func TestCoordinatePair(t *testing.T) {
+	tests := []struct {
+		name     string
+		lat, lng string
+		wantSet  bool
+		wantErr  bool
+	}{
+		{name: "both empty is a valid absent pin", lat: "", lng: ""},
+		{name: "whitespace counts as empty", lat: "  ", lng: "\t"},
+		{name: "both set", lat: "-7.797068", lng: "110.370529", wantSet: true},
+
+		{name: "latitude only", lat: "-7.797068", lng: "", wantErr: true},
+		{name: "longitude only", lat: "", lng: "110.370529", wantErr: true},
+		{name: "latitude out of range", lat: "-91", lng: "110.370529", wantErr: true},
+		// 110 is a legal latitude-shaped number but not a legal latitude, and
+		// -7 is a legal longitude — so a swapped pair is only caught because the
+		// two limits differ. Worth stating: it is the mistake a caller passing
+		// the arguments the wrong way round would make.
+		{name: "swapped pair", lat: "110.370529", lng: "-7.797068", wantErr: true},
+		{name: "both nonsense", lat: "x", lng: "y", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ve := NewValidationError()
+			lat, lng := coordinatePair(ve, tc.lat, tc.lng)
+
+			if tc.wantErr {
+				if !ve.Any() {
+					t.Fatal("coordinatePair accepted it")
+				}
+				if _, ok := ve.Fields[coordFieldKey]; !ok {
+					t.Errorf("messages = %v, want one on %q", ve.Fields, coordFieldKey)
+				}
+				// A rejected pair must write nothing: returning one half plus an
+				// error is exactly the state the rule exists to prevent.
+				if lat.Valid || lng.Valid {
+					t.Errorf("a rejected pair still returned values: %+v %+v", lat, lng)
+				}
+				return
+			}
+
+			if ve.Any() {
+				t.Fatalf("coordinatePair rejected a valid pair: %v", ve.Fields)
+			}
+			if lat.Valid != tc.wantSet || lng.Valid != tc.wantSet {
+				t.Errorf("Valid = %v/%v, want %v for both", lat.Valid, lng.Valid, tc.wantSet)
+			}
+		})
+	}
+}
+
+// TestBookingAndProfileAgreeAboutCoordinates is the same property
+// TestProfileAndBookingAgreeAboutPhoneNumbers states for phone numbers: a pin
+// dropped while booking must not be refused when saved as the profile default.
+// One helper is what guarantees it; this is what would notice if a second one
+// appeared.
+func TestBookingAndProfileAgreeAboutCoordinates(t *testing.T) {
+	pairs := []struct{ lat, lng string }{
+		{"-7.797068", "110.370529"},
+		{"0", "0"},
+		{"-90", "180"},
+		{"", ""},
+		{"-7.797068", ""},
+		{"200", "110.370529"},
+	}
+
+	for _, p := range pairs {
+		bookingVE := NewValidationError()
+		coordinatePair(bookingVE, p.lat, p.lng)
+
+		_, _, profileVE := validateProfile("", "", p.lat, p.lng)
+
+		if bookingVE.Any() != (profileVE != nil) {
+			t.Errorf("(%q,%q): the booking form and the profile form disagree "+
+				"(booking rejected: %v, profile rejected: %v)",
+				p.lat, p.lng, bookingVE.Any(), profileVE != nil)
+		}
+	}
+}

@@ -53,20 +53,50 @@ const turboProgressBarCSS = "'sha256-WAyOw4V+FqDc35lQPyRADLBWbuNK8ahvYEaQIYF1+Ps
 // let through as a fetch.
 const snapOrigins = "https://app.midtrans.com https://app.sandbox.midtrans.com"
 
-const contentSecurityPolicy = "default-src 'self'; " +
-	"script-src 'self'; " +
-	"style-src 'self' " + turboProgressBarCSS + "; " +
-	"img-src 'self' data:; " +
-	"font-src 'self'; " +
-	"connect-src 'self'; " +
-	"form-action 'self' " + snapOrigins + "; " +
-	"frame-ancestors 'none'; " +
-	"base-uri 'none'; " +
-	"object-src 'none'"
+// contentSecurityPolicy builds the policy for one process.
+//
+// tileOrigin is the map tile server, and it is the ONE source that is not a
+// constant: it comes from MAP_TILE_URL, because the OpenStreetMap default has to
+// be swappable for a provider with a contract without touching Go code. Deriving
+// it here from the same setting Leaflet is handed is what stops the two from
+// disagreeing — a hardcoded host would leave the map a blank grey square with
+// nothing in any server log, which is precisely the class of defect this file's
+// other comments were written after.
+//
+// An empty tileOrigin adds no source at all rather than an empty token, which
+// would make the whole img-src directive unparseable. config.validate refuses to
+// boot on a MAP_TILE_URL that yields one, so this is belt and braces.
+//
+// Still no third-party SCRIPT origin: leaflet.js is vendored under static/js
+// beside turbo.js, so the tiles are images and nothing else crosses an origin.
+// Leaflet positions its panes through the CSSOM (element.style.transform), which
+// CSP does not govern, so style-src keeps its hash-only policy.
+func contentSecurityPolicy(tileOrigin string) string {
+	imgSrc := "'self' data:"
+	if tileOrigin != "" {
+		imgSrc += " " + tileOrigin
+	}
+
+	return "default-src 'self'; " +
+		"script-src 'self'; " +
+		"style-src 'self' " + turboProgressBarCSS + "; " +
+		"img-src " + imgSrc + "; " +
+		"font-src 'self'; " +
+		"connect-src 'self'; " +
+		"form-action 'self' " + snapOrigins + "; " +
+		"frame-ancestors 'none'; " +
+		"base-uri 'none'; " +
+		"object-src 'none'"
+}
 
 // permissionsPolicy switches off the capabilities this site never uses, so a
 // script that somehow does run cannot reach for them.
-const permissionsPolicy = "geolocation=(), camera=(), microphone=(), payment=(), usb=()"
+//
+// geolocation is (self), not (): the booking and profile forms offer to place
+// the customer's map pin from the browser's own location. It is the only one
+// here that is opened, and the browser still asks the user — this header only
+// decides whether the question may be put at all. Everything else stays off.
+const permissionsPolicy = "geolocation=(self), camera=(), microphone=(), payment=(), usb=()"
 
 // hstsValue is a year, with subdomains. No preload directive: this app is one
 // system on a shared Appskep domain, and preloading commits every sibling
@@ -80,7 +110,14 @@ const hstsValue = "max-age=31536000; includeSubDomains"
 // production controls HSTS alone: sending it from a development server on plain
 // HTTP would pin localhost to HTTPS in the developer's browser for a year, which
 // is remarkably hard to undo.
-func SecureHeaders(production bool) func(http.Handler) http.Handler {
+//
+// tileOrigin is config.MapConfig.TileCSPSource() — the map tile server, and the
+// only source in the policy that is configurable. Passed in rather than read
+// here because this package reads no configuration, the same reason it cannot
+// import internal/app to share the route-prefix list below.
+func SecureHeaders(production bool, tileOrigin string) func(http.Handler) http.Handler {
+	csp := contentSecurityPolicy(tileOrigin)
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h := w.Header()
@@ -95,7 +132,7 @@ func SecureHeaders(production bool) func(http.Handler) http.Handler {
 			// the same reason; app.Deps.Recoverer lists the same pair and the two
 			// must agree — this package cannot import internal/app to share it.
 			if !strings.HasPrefix(r.URL.Path, "/api") && !strings.HasPrefix(r.URL.Path, "/midtrans") {
-				h.Set("Content-Security-Policy", contentSecurityPolicy)
+				h.Set("Content-Security-Policy", csp)
 			}
 
 			if production {

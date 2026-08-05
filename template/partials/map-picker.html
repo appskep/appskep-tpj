@@ -1,0 +1,83 @@
+{{/*
+  The location picker — a map with one draggable pin, on the booking form and on
+  the profile form.
+
+  A partial rather than markup in each page because it is used by two pages, and
+  the renderer builds ONE template set per page (layout + partials + that one page
+  file): a {{define}} in booking.html would be invisible to profil.html and 500 at
+  render time.
+
+  Takes exactly one value, handler.locationPicker — {Latitude, Longitude, Error,
+  Help, Map}. There is no dict helper and adding one is declined, so the payload
+  is assembled in the handler package.
+
+  ENHANCEMENT ONLY. With static/js/app.js blocked this renders the label, the
+  help text and an empty box: the detect and clear buttons ship `hidden` and are
+  revealed by the script, and the pin is optional on the server, so the form
+  still submits and the booking still commits. The address textarea above it
+  remains the destination of record.
+
+  The data- attributes are the whole interface to the script. It reads the tile
+  server and the default view from here rather than holding its own copy, so
+  MAP_TILE_URL is the one place either is configured — and the same value is what
+  the Content-Security-Policy's img-src is derived from at boot.
+*/}}
+{{- define "map_picker" -}}
+<div>
+  <span class="block text-sm font-semibold">
+    Titik lokasi <span class="font-normal text-ink-faint">(opsional)</span>
+  </span>
+
+  {{/* data-map-tiles, NOT data-map-tile-url. html/template treats any attribute
+       whose name ends in "url" or "uri" as a URL context and normalises the
+       value — which percent-escapes Leaflet's {s}/{z}/{x}/{y} placeholders into
+       %7bs%7d and leaves every tile request pointed at a host that does not
+       exist. The page looks entirely correct in the markup; the map is just
+       grey. Renaming the attribute is the whole fix, because template.URL would
+       still be normalised. */}}
+  <div data-map
+       data-map-tiles="{{.Map.TileURL}}"
+       data-map-tile-attribution="{{.Map.Attribution}}"
+       data-map-default-lat="{{.Map.DefaultLat}}"
+       data-map-default-lng="{{.Map.DefaultLng}}"
+       data-map-zoom="{{.Map.DefaultZoom}}"
+       class="mt-1.5">
+
+    {{/* Written by the script, read by the server. Empty means no pin, and both
+         are always empty or both filled — half a pin is refused in validation. */}}
+    <input type="hidden" name="latitude" value="{{.Latitude}}" data-map-lat-input>
+    <input type="hidden" name="longitude" value="{{.Longitude}}" data-map-lng-input>
+
+    {{/* z-0 keeps Leaflet's panes under the site header: the library gives its
+         own layers a z-index in the hundreds, and an unconstrained map slides
+         over a sticky header while scrolling. */}}
+    <div data-map-canvas
+         class="z-0 h-64 w-full overflow-hidden rounded-card border bg-paper-2 sm:h-72
+                {{if .Error}}border-danger{{else}}border-line{{end}}"></div>
+
+    <div class="mt-2 flex flex-wrap items-center gap-2">
+      {{/* type="button" on both: they sit inside the form and a bare <button>
+           submits it. */}}
+      <button type="button" data-map-detect hidden
+              class="{{template "btn_ghost"}} px-3 py-2 text-xs">
+        {{icon "map-pin" "h-3.5 w-3.5"}} Deteksi lokasi saya
+      </button>
+      <button type="button" data-map-clear hidden
+              class="{{template "btn_ghost"}} px-3 py-2 text-xs text-ink-soft">
+        {{icon "x" "h-3.5 w-3.5"}} Hapus titik
+      </button>
+    </div>
+
+    {{/* Starts empty and is only ever written by the script, so a no-JS visitor
+         is not told to press a button that is not there. The help text below
+         carries the copy that is true either way. */}}
+    <p data-map-status class="mt-2 text-xs text-ink-faint" role="status" aria-live="polite"></p>
+  </div>
+
+  {{if .Error}}
+    <p class="mt-1 text-sm text-danger">{{.Error}}</p>
+  {{else}}
+    <p class="mt-1 text-xs text-ink-faint">{{.Help}}</p>
+  {{end}}
+</div>
+{{- end -}}

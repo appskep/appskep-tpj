@@ -73,6 +73,23 @@ type Site struct {
 	AssetVersion string
 	// Year is the current year, for the footer copyright.
 	Year int
+	// Map is the tile server and starting view for the location picker. From the
+	// environment rather than the settings table: the Content-Security-Policy's
+	// img-src is derived from the same value at boot, and a setting an admin could
+	// change at runtime would leave the header naming the old host.
+	Map MapSettings
+}
+
+// MapSettings is what the location picker needs to render, passed to Leaflet
+// through data- attributes on the widget.
+type MapSettings struct {
+	TileURL     string
+	Attribution string
+	// DefaultLat, DefaultLng and DefaultZoom are where the map opens with no pin
+	// and no answer from geolocation.
+	DefaultLat  string
+	DefaultLng  string
+	DefaultZoom int
 }
 
 // User is the template-facing view of the signed-in user.
@@ -138,5 +155,12 @@ func (r *Renderer) siteFrom(s *service.Settings) Site {
 		OGImage:      s.String(service.KeySiteOGImage, ""),
 		AssetVersion: r.assetVersion,
 		Year:         time.Now().In(r.cfg.App.Location).Year(),
+		Map: MapSettings{
+			TileURL:     r.cfg.Map.TileURL,
+			Attribution: r.cfg.Map.TileAttribution,
+			DefaultLat:  r.cfg.Map.DefaultLat,
+			DefaultLng:  r.cfg.Map.DefaultLng,
+			DefaultZoom: r.cfg.Map.DefaultZoom,
+		},
 	}
 }

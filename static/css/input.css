@@ -14,6 +14,19 @@
 
 @import "tailwindcss";
 
+/* Leaflet's own stylesheet, vendored by `make js` (scripts/build-js.sh).
+ *
+ * Imported into this file rather than linked from the layout so that it is
+ * compiled INTO app.css. view.assetVersion hashes app.css and nothing else, so a
+ * second stylesheet would be served `immutable` for a year with no way to bust
+ * it when Leaflet is bumped. Its relative url(images/...) references resolve
+ * correctly because leaflet.css, app.css and static/css/images/ are all in this
+ * directory.
+ *
+ * Tailwind generates no utilities from it — it is plain CSS with its own
+ * .leaflet-* class names, which nothing in template/ writes by hand. */
+@import "./leaflet.css";
+
 /* Tailwind scans these for class names. The path is relative to this file. */
 @source "../../template";
 

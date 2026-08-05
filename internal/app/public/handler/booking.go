@@ -52,7 +52,19 @@ type bookingFormValues struct {
 	Nama    string
 	Telepon string
 	Alamat  string
-	Catatan string
+	// Latitude and Longitude are written by the map widget into hidden inputs, and
+	// are empty whenever no pin was placed. They travel as strings the whole way:
+	// the DECIMAL columns hand them back as text and a form field takes them back
+	// as text, so there is no float64 anywhere on the path to round them.
+	Latitude  string
+	Longitude string
+	Catatan   string
+}
+
+// HasLocation reports whether a pin was placed, for the review panel and the
+// map widget's starting state. Both halves, because half a pin is not one.
+func (v bookingFormValues) HasLocation() bool {
+	return v.Latitude != "" && v.Longitude != ""
 }
 
 // bookingData is the /booking payload.
@@ -79,6 +91,9 @@ type bookingData struct {
 
 	Form   bookingFormValues
 	Errors map[string]string
+	// Location is the map_picker partial's payload, filled by render from Form
+	// and Errors so no call site can forget it.
+	Location locationPicker
 
 	// Review renders the confirmation panel instead of the submit button. Set only
 	// by a POST that validated cleanly.
@@ -212,16 +227,58 @@ func (h *Booking) Form(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Prefill from the local profile. Name and email come from Appskep; phone and
-	// address are the two fields the user owns here, and re-typing them for every
-	// booking is the kind of friction that loses one.
+	// Prefill from the local profile. Name and email come from Appskep; phone,
+	// address and the map pin are the fields the user owns here, and re-typing them
+	// for every booking is the kind of friction that loses one.
 	if u := auth.UserFrom(r.Context()); u != nil {
 		data.Form.Nama = u.Name
 		data.Form.Telepon = u.Phone
 		data.Form.Alamat = u.Address
+		data.Form.Latitude, data.Form.Longitude = u.Latitude, u.Longitude
+
+		h.prefillFromLastBooking(r, u.ID, &data.Form)
 	}
 
 	h.render(w, r, http.StatusOK, data)
+}
+
+// prefillFromLastBooking fills whatever the profile left blank with what this
+// customer told us the last time they booked.
+//
+// Per field, not all or nothing: someone who saved a phone number but never an
+// address should get the address back and keep the number they chose to store.
+// The profile always wins where it holds a value — it is the page the user went
+// to on purpose.
+//
+// Only ever called from the GET. The review POST and the 422 re-render must not
+// prefill at all: what the user typed on this submission wins, including the
+// fields they deliberately emptied.
+func (h *Booking) prefillFromLastBooking(r *http.Request, userID int64, form *bookingFormValues) {
+	// The common case is a complete profile, and it costs no query at all.
+	if form.Telepon != "" && form.Alamat != "" && form.HasLocation() {
+		return
+	}
+
+	last, err := h.deps.Booking.LastContact(r.Context(), userID)
+	if err != nil {
+		// Advisory only, exactly like the Held check in Submit: losing the prefill
+		// costs the customer some typing, never the page.
+		h.deps.Log.WarnContext(r.Context(), "booking: prefilling from last booking",
+			"user_id", userID, "error", err)
+		return
+	}
+
+	if form.Telepon == "" {
+		form.Telepon = last.Phone
+	}
+	if form.Alamat == "" {
+		form.Alamat = last.Address
+	}
+	// The pin moves as a pair or not at all — lending a latitude to a form that
+	// already has a longitude would invent a location nobody has ever been to.
+	if !form.HasLocation() && last.Latitude != "" && last.Longitude != "" {
+		form.Latitude, form.Longitude = last.Latitude, last.Longitude
+	}
 }
 
 // Submit handles both phases of the form: the review, and the commit.
@@ -240,13 +297,15 @@ func (h *Booking) Submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	values := bookingFormValues{
-		Layanan: r.PostFormValue("layanan"),
-		Tanggal: r.PostFormValue("tanggal"),
-		Slot:    r.PostFormValue("slot"),
-		Nama:    r.PostFormValue("nama"),
-		Telepon: r.PostFormValue("telepon"),
-		Alamat:  r.PostFormValue("alamat"),
-		Catatan: r.PostFormValue("catatan"),
+		Layanan:   r.PostFormValue("layanan"),
+		Tanggal:   r.PostFormValue("tanggal"),
+		Slot:      r.PostFormValue("slot"),
+		Nama:      r.PostFormValue("nama"),
+		Telepon:   r.PostFormValue("telepon"),
+		Alamat:    r.PostFormValue("alamat"),
+		Latitude:  r.PostFormValue("latitude"),
+		Longitude: r.PostFormValue("longitude"),
+		Catatan:   r.PostFormValue("catatan"),
 	}
 
 	in := service.CreateInput{
@@ -256,6 +315,8 @@ func (h *Booking) Submit(w http.ResponseWriter, r *http.Request) {
 		Name:        values.Nama,
 		Phone:       values.Telepon,
 		Address:     values.Alamat,
+		Latitude:    values.Latitude,
+		Longitude:   values.Longitude,
 		Notes:       values.Catatan,
 	}
 
@@ -862,6 +923,11 @@ func (h *Booking) render(w http.ResponseWriter, r *http.Request, status int, dat
 	if data.Service != nil {
 		title = "Booking " + data.Service.Name
 	}
+
+	// Assembled here rather than at each of the four call sites, so the 422
+	// re-render cannot come back without a map or with a stale pin in it.
+	data.Location = locationPickerFor(h.deps, data.Form.Latitude, data.Form.Longitude,
+		"Bantu terapis menemukan alamat di atas. Boleh dilewati.", data.Errors)
 
 	h.deps.View.Render(w, r, status, "public/booking", &view.View{
 		Page: view.Page{

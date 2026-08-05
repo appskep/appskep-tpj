@@ -24,9 +24,13 @@ type User struct {
 	Email         string
 	Phone         string
 	Address       string
-	AvatarPath    string
-	Role          string
-	IsActive      bool
+	// Latitude and Longitude are the saved map pin, empty when there is none.
+	// Both or neither: the pair is written together and unwrapped together.
+	Latitude   string
+	Longitude  string
+	AvatarPath string
+	Role       string
+	IsActive   bool
 }
 
 // UserFromSQLC flattens the generated row. This is the only place the users
@@ -39,6 +43,8 @@ func UserFromSQLC(u sqlc.User) User {
 		Email:         u.Email,
 		Phone:         u.Phone.String,
 		Address:       u.Address.String,
+		Latitude:      u.Latitude.String,
+		Longitude:     u.Longitude.String,
 		AvatarPath:    u.AvatarPath.String,
 		Role:          string(u.Role),
 		IsActive:      u.IsActive,

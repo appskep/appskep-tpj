@@ -30,7 +30,10 @@ UPDATE users SET is_active = ? WHERE id = ?;
 -- name: UpdateUserProfile :exec
 -- Only the locally-owned fields. name and email belong to Appskep and are
 -- refreshed from the JWT on each login.
-UPDATE users SET phone = ?, address = ? WHERE id = ?;
+--
+-- latitude and longitude move as a pair, always both, so clearing the map pin
+-- cannot leave half of one behind.
+UPDATE users SET phone = ?, address = ?, latitude = ?, longitude = ? WHERE id = ?;
 
 -- name: UpdateUserAvatar :exec
 UPDATE users SET avatar_path = ? WHERE id = ?;

@@ -139,6 +139,41 @@ self-consistent, and only a partial swap in a live DOM can be wrong.
 - [ ] **With JavaScript off**, every date, month and slot link is an ordinary
       navigation that renders the same page.
 
+### The location picker (Phase 13.5)
+
+Every one of these is invisible to `curl` and to `make test`: a permission
+prompt, a blocked tile and a map that never initialises all look like a correct
+page from the outside. Check on `/booking` step 3 **and** on `/profil` — one
+widget, two hosts.
+
+- [ ] **The tiles actually load.** A map with the streets on it, not a grey
+      square. A grey square with a console `img-src` refusal means the CSP no
+      longer matches `MAP_TILE_URL`; a grey square with 404s in the network tab
+      means the tile template's `{s}/{z}/{x}/{y}` placeholders were escaped —
+      check the rendered `data-map-tiles` attribute for `%7b`.
+- [ ] **The map appears when step 3 arrives inside the frame.** Pick a layanan, a
+      date, then a slot. The map must render at that moment, not only on a full
+      page load — that path is `turbo:frame-load`, and `turbo:load` never fires
+      for it.
+- [ ] **Pick three different slots in a row.** Still exactly one map and one
+      marker. Two stacked instances mean the `data-map-ready` guard is gone.
+- [ ] **Navigate away and come back** (Turbo snapshot restore). The map still
+      works, and dragging still updates the hidden inputs.
+- [ ] **No permission prompt on load** for a visitor who has never granted it.
+      The prompt belongs to the "Deteksi lokasi saya" button and nothing else.
+- [ ] **Grant it, then reload.** The pin now appears with no prompt at all.
+- [ ] **Deny it.** The status line says so, the map stays usable, and the booking
+      still submits — the pin is optional.
+- [ ] **Click the map, then drag the pin.** The review panel afterwards must name
+      the dragged point, not the detected one.
+- [ ] **"Hapus titik" on `/profil`** clears the pin, and saving leaves both
+      columns NULL rather than 0,0.
+- [ ] **With JavaScript off**, step 3 shows no map, **no dead buttons**, and the
+      booking submits and commits normally.
+- [ ] **On plain http** (not localhost): the detect button is absent rather than
+      present and silent. `navigator.geolocation` never calls back outside a
+      secure context.
+
 ## 3. The payment path
 
 Sandbox only. `MIDTRANS_ENV` must not be `midtrans.Production`.

@@ -53,7 +53,7 @@ func (q *Queries) CountUsers(ctx context.Context, arg CountUsersParams) (int64, 
 
 const getUser = `-- name: GetUser :one
 
-SELECT id, appskep_user_id, email, name, phone, address, avatar_path, role, is_active, last_login_at, created_at, updated_at FROM users WHERE id = ? LIMIT 1
+SELECT id, appskep_user_id, email, name, phone, address, latitude, longitude, avatar_path, role, is_active, last_login_at, created_at, updated_at FROM users WHERE id = ? LIMIT 1
 `
 
 // users — the local mirror of the Appskep identity.
@@ -70,6 +70,8 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.Name,
 		&i.Phone,
 		&i.Address,
+		&i.Latitude,
+		&i.Longitude,
 		&i.AvatarPath,
 		&i.Role,
 		&i.IsActive,
@@ -81,7 +83,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 }
 
 const getUserByAppskepID = `-- name: GetUserByAppskepID :one
-SELECT id, appskep_user_id, email, name, phone, address, avatar_path, role, is_active, last_login_at, created_at, updated_at FROM users WHERE appskep_user_id = ? LIMIT 1
+SELECT id, appskep_user_id, email, name, phone, address, latitude, longitude, avatar_path, role, is_active, last_login_at, created_at, updated_at FROM users WHERE appskep_user_id = ? LIMIT 1
 `
 
 func (q *Queries) GetUserByAppskepID(ctx context.Context, appskepUserID uint64) (User, error) {
@@ -94,6 +96,8 @@ func (q *Queries) GetUserByAppskepID(ctx context.Context, appskepUserID uint64) 
 		&i.Name,
 		&i.Phone,
 		&i.Address,
+		&i.Latitude,
+		&i.Longitude,
 		&i.AvatarPath,
 		&i.Role,
 		&i.IsActive,
@@ -105,7 +109,7 @@ func (q *Queries) GetUserByAppskepID(ctx context.Context, appskepUserID uint64) 
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, appskep_user_id, email, name, phone, address, avatar_path, role, is_active, last_login_at, created_at, updated_at FROM users
+SELECT id, appskep_user_id, email, name, phone, address, latitude, longitude, avatar_path, role, is_active, last_login_at, created_at, updated_at FROM users
 WHERE name LIKE ? OR email LIKE ?
 ORDER BY id DESC
 LIMIT ? OFFSET ?
@@ -140,6 +144,8 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Name,
 			&i.Phone,
 			&i.Address,
+			&i.Latitude,
+			&i.Longitude,
 			&i.AvatarPath,
 			&i.Role,
 			&i.IsActive,
@@ -203,19 +209,30 @@ func (q *Queries) UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarPara
 }
 
 const updateUserProfile = `-- name: UpdateUserProfile :exec
-UPDATE users SET phone = ?, address = ? WHERE id = ?
+UPDATE users SET phone = ?, address = ?, latitude = ?, longitude = ? WHERE id = ?
 `
 
 type UpdateUserProfileParams struct {
-	Phone   sql.NullString `json:"phone"`
-	Address sql.NullString `json:"address"`
-	ID      int64          `json:"id"`
+	Phone     sql.NullString `json:"phone"`
+	Address   sql.NullString `json:"address"`
+	Latitude  sql.NullString `json:"latitude"`
+	Longitude sql.NullString `json:"longitude"`
+	ID        int64          `json:"id"`
 }
 
 // Only the locally-owned fields. name and email belong to Appskep and are
 // refreshed from the JWT on each login.
+//
+// latitude and longitude move as a pair, always both, so clearing the map pin
+// cannot leave half of one behind.
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserProfile, arg.Phone, arg.Address, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateUserProfile,
+		arg.Phone,
+		arg.Address,
+		arg.Latitude,
+		arg.Longitude,
+		arg.ID,
+	)
 	return err
 }
 

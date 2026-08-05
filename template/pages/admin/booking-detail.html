@@ -89,6 +89,23 @@
           <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Alamat</dt>
           <dd class="mt-1">{{if .Data.Booking.CustomerAddress.Valid}}{{nullstr .Data.Booking.CustomerAddress}}{{else}}<span class="text-ink-faint">—</span>{{end}}</dd>
         </div>
+        {{/* The pin the customer dropped, if they dropped one. This is the whole
+             point of collecting it: coordinates nobody can open are coordinates
+             nobody can drive to. A link out, so no map is loaded here and the
+             Content-Security-Policy is untouched. */}}
+        {{if and .Data.Booking.Latitude.Valid .Data.Booking.Longitude.Valid}}
+          <div class="sm:col-span-2">
+            <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Titik lokasi</dt>
+            <dd class="mt-1 font-medium">
+              <a href="https://www.google.com/maps?q={{nullstr .Data.Booking.Latitude}},{{nullstr .Data.Booking.Longitude}}"
+                 target="_blank" rel="noopener noreferrer"
+                 class="inline-flex items-center gap-1.5 text-clay-600 hover:underline">
+                {{icon "map-pin" "h-4 w-4"}}
+                {{nullstr .Data.Booking.Latitude}}, {{nullstr .Data.Booking.Longitude}}
+              </a>
+            </dd>
+          </div>
+        {{end}}
         <div class="sm:col-span-2">
           <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Akun Appskep</dt>
           <dd class="mt-1">{{.Data.Booking.UserName}} · <span class="text-ink-soft">{{.Data.Booking.UserEmail}}</span></dd>

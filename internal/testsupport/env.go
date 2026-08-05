@@ -263,6 +263,16 @@ func Config(t *testing.T) *config.Config {
 			FromEmail: "",
 			Timeout:   10 * time.Second,
 		},
+		Map: config.MapConfig{
+			// The real defaults, so a test asserting on the widget's data-
+			// attributes is asserting on what a deployment actually renders. No
+			// tile is ever fetched: nothing here runs a browser.
+			TileURL:         "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+			TileAttribution: "© OpenStreetMap",
+			DefaultLat:      "-7.797068",
+			DefaultLng:      "110.370529",
+			DefaultZoom:     12,
+		},
 	}
 }
 

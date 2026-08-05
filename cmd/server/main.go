@@ -248,7 +248,7 @@ func newRouter(d *app.Deps) http.Handler {
 	// No chi RealIP: it trusts X-Forwarded-For unconditionally and is spoofable.
 	// appmw.ClientIP is the trusted-proxy-aware resolver the logger and the rate
 	// limiter use instead, and it reads TRUSTED_PROXIES rather than any header.
-	r.Use(appmw.SecureHeaders(d.Cfg.IsProduction()))
+	r.Use(appmw.SecureHeaders(d.Cfg.IsProduction(), d.Cfg.Map.TileCSPSource()))
 	r.Use(appmw.Logger(d.Log, d.Cfg.Server.TrustedProxies))
 	// Deps.Recoverer rather than chi's: it renders the styled 500 page for HTML
 	// requests and JSON under /api, where chi's can only write a bare string.
