@@ -1857,7 +1857,8 @@ Four smaller traps, all of them browser-only:
   stylesheet centres it with `margin: auto` against `inset: 0`; preflight zeroes `margin` on
   `*`, which leaves the box over-constrained and pinned to a corner of the viewport. Found by
   looking at it. `partials/confirm.html` has carried `m-auto` since Phase 4 for this reason —
-  the class reads like arbitrary styling and is load-bearing.
+  the class reads like arbitrary styling and is load-bearing. The ringkasan no longer relies on
+  it, having since been rebuilt as a scroll container (below), but every other dialog does.
 
 - `showModal()` throws `InvalidStateError` on a dialog that is open but **not** modal — which
   is precisely how the server renders it — so the upgrade has to `close()` first.
@@ -1869,6 +1870,28 @@ Four smaller traps, all of them browser-only:
   and would otherwise anchor to the viewport. `modal:` and `not-modal:` are the project's first
   two `@custom-variant`s; `:modal` has no built-in variant in Tailwind v4, and declaring them
   in `input.css` beats scattering `[&:not(:modal)]:` through the markup.
+
+### The card is not height-limited
+
+Asked for after the first cut, and it is not a class deletion. Removing the `max-height` the
+dialog carried leaves the browser's own `dialog:modal { max-height: calc(100% - 6px - 2em);
+overflow: auto }` doing the same job, so the cap survives; forcing `max-h-none` instead
+strands the confirm button, because a fixed-position box taller than the viewport cannot be
+scrolled to — with `inset: 0` the overflow splits across both edges and neither end is
+reachable.
+
+So the `<dialog>` became the full-viewport **scroll container** — transparent, no chrome —
+with the visible card inside it, free to be any height. Short summary: centred, as before.
+Long one: the overlay scrolls. The UA sheet resists on four properties at once (`width` and
+`height` are `fit-content`, and both are capped), hence `modal:h-full`, `modal:max-h-none`,
+`modal:max-w-none` and `modal:overflow-y-auto` together; centring moves to flexbox on an
+`in-modal:min-h-full` wrapper, which is what retires the `m-auto` trap for this dialog.
+
+**`in-modal` is a third `@custom-variant`, and it is load-bearing.** `:modal` matches the
+`<dialog>` element and nothing else, so `modal:flex` on the wrapper compiles to `div:modal`
+and never applies — no error and no warning, just a card at full viewport width. Caught by
+reading the emitted CSS rather than by any test, which is the only place it is visible short
+of a browser.
 
 **Not done, deliberately:** a client-side re-open. Closing the dialog returns to an editable
 form, and the only way back to the summary is another "Lihat ringkasan" — which re-runs

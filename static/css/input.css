@@ -39,14 +39,17 @@
  *
  * not-modal is the load-bearing half: the UA stylesheet gives an open non-modal
  * <dialog> `position: absolute`, which would tear the fallback panel out of the
- * page flow and float it over the form. The reset is `not-modal:relative` rather
- * than `static`, because the close button inside is absolutely positioned and
- * needs the dialog itself as its containing block — static would fling it to the
- * corner of the viewport. Author styles beat UA styles regardless of specificity,
- * so it has to be scoped to :not(:modal) or it would break the modal too, whose
- * `position: fixed` comes from that same UA sheet. */
+ * page flow and float it over the form. Author styles beat UA styles regardless
+ * of specificity, so the reset has to be scoped to :not(:modal) or it would break
+ * the modal too, whose `position: fixed` comes from that same UA sheet. */
 @custom-variant modal (&:modal);
 @custom-variant not-modal (&:not(:modal));
+
+/* in-modal is the same question asked from INSIDE. :modal matches the <dialog>
+ * element and nothing else, so `modal:flex` on a child compiles to `div:modal`
+ * and silently never applies — the ringkasan's centring wrapper and card are both
+ * children, and both need to know. */
+@custom-variant in-modal (&:where(dialog:modal *));
 
 @theme {
   /* --- Surfaces -------------------------------------------------------- */

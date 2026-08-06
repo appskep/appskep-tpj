@@ -424,138 +424,168 @@
           anyone whose JS failed to load, while every test still passes.
           not-modal:* is the geometry for that fallback, modal:* for the upgrade.
 
-          modal:m-auto is the one that is easy to lose. A modal <dialog> is
-          centred by the UA stylesheet's `margin: auto` against inset:0 — and
-          Tailwind's preflight zeroes the margin on `*`, so without this the
-          box is over-constrained and pins to a corner of the viewport.
-          partials/confirm.html carries the same class for the same reason; it
-          is unscoped there because that dialog is only ever modal.
+          The card is NOT height-limited, and that costs a third element.
+
+          A modal <dialog> is a fixed-position box, so anything taller than the
+          viewport simply cannot be scrolled to: with inset:0 the overflow splits
+          across both edges and the confirm button ends up unreachable. Capping it
+          instead (max-height + overflow) is what the browser's own stylesheet
+          does, and it is what this had at first.
+
+          So the <dialog> is the full-viewport SCROLL CONTAINER — transparent, no
+          chrome of its own — and the visible card lives inside it, free to be any
+          height. Short summary: centred, exactly as before. Long one: the overlay
+          scrolls and every control stays reachable. The UA sheet fights this on
+          four properties at once (width and height are fit-content, and both are
+          capped), hence modal:h-full, modal:max-h-none and modal:max-w-none.
+
+          Centring is flexbox on the wrapper rather than `margin: auto`, which is
+          how partials/confirm.html does it — that one needs m-auto because
+          Tailwind's preflight zeroes margin on `*` and the UA centres a modal
+          dialog with `margin: auto` against inset:0. Not a problem here, because
+          nothing depends on the margin any more.
         */}}
         <dialog id="ringkasan" data-dialog-open open
                 aria-labelledby="ringkasan-judul"
-                class="rounded-card border-2 border-clay-500 bg-paper p-0 text-ink backdrop:bg-forest-950/60
-                       not-modal:relative not-modal:mt-8 not-modal:w-full
-                       modal:m-auto modal:w-[min(34rem,calc(100vw-2rem))]
-                       modal:max-h-[calc(100dvh-3rem)] modal:overflow-y-auto modal:shadow-lifted">
-          {{/* Close is pure HTML — method="dialog" — exactly as in partials/confirm.html.
-               Escape, the focus trap and the backdrop all come from the browser
-               once showModal() is what opened the element, so there is no JS close
-               path anywhere in this project. */}}
-          <form method="dialog" class="absolute right-3 top-3">
-            <button class="grid h-9 w-9 place-items-center rounded-field text-ink-soft transition hover:bg-paper-2"
-                    aria-label="Tutup">
-              {{icon "x" "h-4 w-4"}}
-            </button>
-          </form>
+                class="w-full bg-transparent p-0 text-ink backdrop:bg-forest-950/60
+                       not-modal:relative not-modal:mt-8
+                       modal:m-0 modal:h-full modal:max-h-none modal:max-w-none
+                       modal:overflow-y-auto">
+          {{/* min-h-full against a viewport-height scroll container is what centres
+               a short card and lets a tall one grow instead of being clipped.
 
-          <div class="p-6">
-            <h2 id="ringkasan-judul" class="font-display text-xl font-bold">Periksa lagi</h2>
-            <p class="mt-1 text-sm text-ink-soft">
-              Setelah dikonfirmasi, slot ini ditahan atas nama Anda dan harus dibayar sebelum batas waktu.
-            </p>
+               in-modal, not the plain variant. `:modal` matches the <dialog>
+               element and nothing else, so the plain one here would compile to
+               `div:modal` and never apply — no error, no warning, just a card at
+               full viewport width. (Naming it in prose rather than in code on
+               purpose: Tailwind scans comments too, and would emit the dead rule.)
+               See the @custom-variant in static/css/input.css. */}}
+          <div class="in-modal:flex in-modal:min-h-full in-modal:items-center in-modal:justify-center in-modal:p-4">
+            <div class="relative w-full rounded-card border-2 border-clay-500 bg-paper shadow-lifted
+                        in-modal:max-w-[34rem]">
+              {{/* Close is pure HTML — method="dialog" — exactly as in partials/confirm.html.
+                   Escape, the focus trap and the backdrop all come from the browser
+                   once showModal() is what opened the element, so there is no JS close
+                   path anywhere in this project.
 
-            <dl class="mt-5 divide-y divide-line border-y border-line text-sm">
-              <div class="flex justify-between gap-4 py-3">
-                <dt class="text-ink-soft">Layanan</dt>
-                <dd class="text-right font-semibold">{{$svc.Name}}</dd>
-              </div>
-              <div class="flex justify-between gap-4 py-3">
-                <dt class="text-ink-soft">Jadwal</dt>
-                <dd class="text-right font-semibold">
-                  {{dateID $slot.SlotDate}}<br>
-                  <span class="font-normal text-ink-soft">{{timeRange $slot.StartTime $slot.EndTime}}</span>
-                </dd>
-              </div>
-              <div class="flex justify-between gap-4 py-3">
-                <dt class="text-ink-soft">Durasi</dt>
-                <dd class="text-right font-semibold">{{duration $svc.DurationMinutes}}</dd>
-              </div>
-              <div class="flex justify-between gap-4 py-3">
-                <dt class="text-ink-soft">Nama</dt>
-                <dd class="text-right font-semibold">{{.Data.Form.Nama}}</dd>
-              </div>
-              <div class="flex justify-between gap-4 py-3">
-                <dt class="text-ink-soft">Telepon</dt>
-                <dd class="text-right font-semibold">{{.Data.Form.Telepon}}</dd>
-              </div>
-              <div class="flex justify-between gap-4 py-3">
-                <dt class="shrink-0 text-ink-soft">Alamat terapi</dt>
-                <dd class="text-right">{{.Data.Form.Alamat}}</dd>
-              </div>
-              {{if .Data.Form.HasLocation}}
-                <div class="flex justify-between gap-4 py-3">
-                  <dt class="shrink-0 text-ink-soft">Titik lokasi</dt>
-                  {{/* An ordinary link out, not an embed: no origin is loaded, so
-                       the Content-Security-Policy is untouched by it. */}}
-                  <dd class="text-right">
-                    <a href="https://www.google.com/maps?q={{.Data.Form.Latitude}},{{.Data.Form.Longitude}}"
-                       target="_blank" rel="noopener noreferrer"
-                       class="font-semibold text-clay-700 underline">Sudah ditandai di peta</a>
-                  </dd>
-                </div>
-              {{end}}
-              {{with .Data.Form.Catatan}}
-                <div class="flex justify-between gap-4 py-3">
-                  <dt class="shrink-0 text-ink-soft">Catatan</dt>
-                  <dd class="text-right">{{.}}</dd>
-                </div>
-              {{end}}
-              <div class="flex items-baseline justify-between gap-4 py-4">
-                <dt class="font-semibold">Total</dt>
-                <dd class="font-display text-2xl font-bold text-clay-600">{{rupiah $svc.Price}}</dd>
-              </div>
-            </dl>
-
-            {{with .Data.Terms}}
-              <p class="mt-4 text-xs leading-relaxed text-ink-faint">{{.}}</p>
-            {{end}}
-
-            {{/* Two sibling forms, never nested — the dialog's own close form and
-                 the one that writes. "Ubah data" comes first in source so that
-                 flex-col-reverse puts the commit on top on a phone, and so that
-                 the last <form to open before name="konfirmasi" is still the
-                 commit form: internal/integration/location_test.go finds it by
-                 walking backwards from that input.
-
-                 There is deliberately no way to re-open this dialog without
-                 re-submitting. Closing it returns to an editable form, and a
-                 client-side re-open would show a summary — and commit hidden
-                 inputs — describing values the customer has since changed. */}}
-            <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <form method="dialog">
-                <button class="{{template "btn_ghost"}} w-full sm:w-auto">Ubah data</button>
-              </form>
-
-              {{/* Every value re-posted verbatim, so the commit writes what was
-                   reviewed rather than whatever the form above holds now.
-
-                   data-turbo-frame="_top" is load-bearing since step 3 moved inside
-                   the frame. This form answers 303 to /booking/{code}/pembayaran,
-                   which has no booking_jadwal element — inside a frame Turbo follows
-                   the redirect, fails to match, and EMPTIES the frame rather than
-                   navigating, so the button appears to do nothing. curl cannot see
-                   that: it never runs Turbo, and the 303 it follows is correct. */}}
-              <form method="post" action="/booking" data-turbo-frame="_top">
-                {{csrfField .CSRF}}
-                <input type="hidden" name="konfirmasi" value="1">
-                <input type="hidden" name="layanan" value="{{.Data.Form.Layanan}}">
-                <input type="hidden" name="tanggal" value="{{.Data.Form.Tanggal}}">
-                <input type="hidden" name="slot" value="{{.Data.Form.Slot}}">
-                <input type="hidden" name="nama" value="{{.Data.Form.Nama}}">
-                <input type="hidden" name="telepon" value="{{.Data.Form.Telepon}}">
-                <input type="hidden" name="alamat" value="{{.Data.Form.Alamat}}">
-                {{/* The pin, re-posted like everything else. This form is the one
-                     that WRITES, and the map widget lives in the other one — leave
-                     these out and the review would show a location the commit
-                     silently discards. */}}
-                <input type="hidden" name="latitude" value="{{.Data.Form.Latitude}}">
-                <input type="hidden" name="longitude" value="{{.Data.Form.Longitude}}">
-                <input type="hidden" name="catatan" value="{{.Data.Form.Catatan}}">
-
-                <button type="submit" class="{{template "btn_primary"}} w-full sm:w-auto">
-                  {{icon "check" "h-4 w-4"}} Konfirmasi &amp; lanjut ke pembayaran
+                   `relative` on the card above is what this anchors to. */}}
+              <form method="dialog" class="absolute right-3 top-3">
+                <button class="grid h-9 w-9 place-items-center rounded-field text-ink-soft transition hover:bg-paper-2"
+                        aria-label="Tutup">
+                  {{icon "x" "h-4 w-4"}}
                 </button>
               </form>
+
+              <div class="p-6">
+                <h2 id="ringkasan-judul" class="font-display text-xl font-bold">Periksa lagi</h2>
+                <p class="mt-1 text-sm text-ink-soft">
+                  Setelah dikonfirmasi, slot ini ditahan atas nama Anda dan harus dibayar sebelum batas waktu.
+                </p>
+
+                <dl class="mt-5 divide-y divide-line border-y border-line text-sm">
+                  <div class="flex justify-between gap-4 py-3">
+                    <dt class="text-ink-soft">Layanan</dt>
+                    <dd class="text-right font-semibold">{{$svc.Name}}</dd>
+                  </div>
+                  <div class="flex justify-between gap-4 py-3">
+                    <dt class="text-ink-soft">Jadwal</dt>
+                    <dd class="text-right font-semibold">
+                      {{dateID $slot.SlotDate}}<br>
+                      <span class="font-normal text-ink-soft">{{timeRange $slot.StartTime $slot.EndTime}}</span>
+                    </dd>
+                  </div>
+                  <div class="flex justify-between gap-4 py-3">
+                    <dt class="text-ink-soft">Durasi</dt>
+                    <dd class="text-right font-semibold">{{duration $svc.DurationMinutes}}</dd>
+                  </div>
+                  <div class="flex justify-between gap-4 py-3">
+                    <dt class="text-ink-soft">Nama</dt>
+                    <dd class="text-right font-semibold">{{.Data.Form.Nama}}</dd>
+                  </div>
+                  <div class="flex justify-between gap-4 py-3">
+                    <dt class="text-ink-soft">Telepon</dt>
+                    <dd class="text-right font-semibold">{{.Data.Form.Telepon}}</dd>
+                  </div>
+                  <div class="flex justify-between gap-4 py-3">
+                    <dt class="shrink-0 text-ink-soft">Alamat terapi</dt>
+                    <dd class="text-right">{{.Data.Form.Alamat}}</dd>
+                  </div>
+                  {{if .Data.Form.HasLocation}}
+                    <div class="flex justify-between gap-4 py-3">
+                      <dt class="shrink-0 text-ink-soft">Titik lokasi</dt>
+                      {{/* An ordinary link out, not an embed: no origin is loaded, so
+                           the Content-Security-Policy is untouched by it. */}}
+                      <dd class="text-right">
+                        <a href="https://www.google.com/maps?q={{.Data.Form.Latitude}},{{.Data.Form.Longitude}}"
+                           target="_blank" rel="noopener noreferrer"
+                           class="font-semibold text-clay-700 underline">Sudah ditandai di peta</a>
+                      </dd>
+                    </div>
+                  {{end}}
+                  {{with .Data.Form.Catatan}}
+                    <div class="flex justify-between gap-4 py-3">
+                      <dt class="shrink-0 text-ink-soft">Catatan</dt>
+                      <dd class="text-right">{{.}}</dd>
+                    </div>
+                  {{end}}
+                  <div class="flex items-baseline justify-between gap-4 py-4">
+                    <dt class="font-semibold">Total</dt>
+                    <dd class="font-display text-2xl font-bold text-clay-600">{{rupiah $svc.Price}}</dd>
+                  </div>
+                </dl>
+
+                {{with .Data.Terms}}
+                  <p class="mt-4 text-xs leading-relaxed text-ink-faint">{{.}}</p>
+                {{end}}
+
+                {{/* Two sibling forms, never nested — the dialog's own close form and
+                     the one that writes. "Ubah data" comes first in source so that
+                     flex-col-reverse puts the commit on top on a phone, and so that
+                     the last <form to open before name="konfirmasi" is still the
+                     commit form: internal/integration/location_test.go finds it by
+                     walking backwards from that input.
+
+                     There is deliberately no way to re-open this dialog without
+                     re-submitting. Closing it returns to an editable form, and a
+                     client-side re-open would show a summary — and commit hidden
+                     inputs — describing values the customer has since changed. */}}
+                <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <form method="dialog">
+                    <button class="{{template "btn_ghost"}} w-full sm:w-auto">Ubah data</button>
+                  </form>
+
+                  {{/* Every value re-posted verbatim, so the commit writes what was
+                       reviewed rather than whatever the form above holds now.
+
+                       data-turbo-frame="_top" is load-bearing since step 3 moved inside
+                       the frame. This form answers 303 to /booking/{code}/pembayaran,
+                       which has no booking_jadwal element — inside a frame Turbo follows
+                       the redirect, fails to match, and EMPTIES the frame rather than
+                       navigating, so the button appears to do nothing. curl cannot see
+                       that: it never runs Turbo, and the 303 it follows is correct. */}}
+                  <form method="post" action="/booking" data-turbo-frame="_top">
+                    {{csrfField .CSRF}}
+                    <input type="hidden" name="konfirmasi" value="1">
+                    <input type="hidden" name="layanan" value="{{.Data.Form.Layanan}}">
+                    <input type="hidden" name="tanggal" value="{{.Data.Form.Tanggal}}">
+                    <input type="hidden" name="slot" value="{{.Data.Form.Slot}}">
+                    <input type="hidden" name="nama" value="{{.Data.Form.Nama}}">
+                    <input type="hidden" name="telepon" value="{{.Data.Form.Telepon}}">
+                    <input type="hidden" name="alamat" value="{{.Data.Form.Alamat}}">
+                    {{/* The pin, re-posted like everything else. This form is the one
+                         that WRITES, and the map widget lives in the other one — leave
+                         these out and the review would show a location the commit
+                         silently discards. */}}
+                    <input type="hidden" name="latitude" value="{{.Data.Form.Latitude}}">
+                    <input type="hidden" name="longitude" value="{{.Data.Form.Longitude}}">
+                    <input type="hidden" name="catatan" value="{{.Data.Form.Catatan}}">
+
+                    <button type="submit" class="{{template "btn_primary"}} w-full sm:w-auto">
+                      {{icon "check" "h-4 w-4"}} Konfirmasi &amp; lanjut ke pembayaran
+                    </button>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
         </dialog>

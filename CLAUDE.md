@@ -376,13 +376,21 @@ must never appear in the booking transaction.
   every test stayed green — so `openDialogs` must `close()` first (`showModal()` throws
   `InvalidStateError` on a dialog that is open but not modal) and guard on `:modal`, since
   `turbo:load` and `turbo:frame-load` can both fire for one arrival. The two geometries are
-  the `modal:` / `not-modal:` `@custom-variant`s in `input.css`; `not-modal:relative` is
-  load-bearing twice over, because the UA stylesheet floats an open non-modal dialog with
-  `position: absolute` and the close button inside needs the dialog as its containing block.
-  **`modal:m-auto` is the one that is easy to lose**: a modal `<dialog>` is centred by the UA
-  stylesheet's `margin: auto` against `inset: 0`, and Tailwind's preflight zeroes `margin` on
-  `*` — so without it the box is over-constrained and pins to a corner. `confirm.html` carries
-  the same class, unscoped, because that dialog is only ever modal.
+  the `modal:` / `not-modal:` `@custom-variant`s in `input.css`; `not-modal:relative` is what
+  keeps the fallback in flow, because the UA stylesheet floats an open non-modal dialog with
+  `position: absolute`.
+- **A modal `<dialog>` that must not be height-limited is a scroll container, not a card.** A
+  fixed-position box taller than the viewport cannot be scrolled to — with `inset: 0` the
+  overflow splits across both edges and the confirm button is unreachable — so the `<dialog>`
+  is transparent, fills the viewport (`modal:h-full modal:max-h-none modal:max-w-none
+  modal:overflow-y-auto`, four properties because the UA sets `width`/`height: fit-content`
+  and caps both) and the visible card sits inside it, centred by flexbox on an
+  `in-modal:min-h-full` wrapper. **`in-modal:` is a third variant and it is not optional
+  sugar**: `:modal` matches the `<dialog>` element alone, so `modal:*` on a child compiles to
+  `div:modal` and silently never applies. Centring by `margin: auto` is the other option and is what
+  `confirm.html` does — that one needs an explicit **`m-auto`**, because the UA centres a modal
+  dialog with `margin: auto` against `inset: 0` and Tailwind's preflight zeroes `margin` on
+  `*`; drop it there and the dialog pins to a corner.
   Closing is always the browser's — `<form method="dialog">`, as in
   `partials/confirm.html` — and there is deliberately no client-side re-open: the summary
   and the hidden inputs that commit it would then describe values the customer had since

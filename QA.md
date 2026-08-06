@@ -168,8 +168,11 @@ nothing more: whether the upgrade happens is browser-only.
       filled, including the map pin. Press "Lihat ringkasan" again: the summary
       shows the *edited* values, because re-opening it costs a real POST that
       re-runs validation. There is deliberately no client-side re-open.
-- [ ] **A long summary scrolls inside the dialog, not the page.** Book with a long
-      alamat and a long catatan at 390px; the confirm button must stay reachable.
+- [ ] **A long summary is never clipped.** The card has no height limit: it grows to
+      whatever it needs and the *overlay* scrolls. Book with a long alamat and a long
+      catatan at **390×640** — a short viewport, not just a narrow one — and check that
+      "Konfirmasi" is reachable. A fixed-position box taller than the screen cannot be
+      scrolled to at all, which is the failure this shape exists to avoid.
 - [ ] **"Konfirmasi & lanjut ke pembayaran"** still lands on `/pembayaran` from
       inside the dialog — it is the `data-turbo-frame="_top"` path above, now one
       level deeper. **Repeat this one in Firefox**, which re-checks `form-action`
