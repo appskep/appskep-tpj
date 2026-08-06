@@ -127,6 +127,48 @@
 
       {{/* Coverage, not a venue: the therapist travels to the customer, so this
            line names the area served rather than an address to come to. */}}
+      {{/* ----------------------------------------------------- TERAPIS */}}
+      {{if .Data.Therapists}}
+        <section class="mt-10 border-t border-line pt-8">
+          <h2 class="flex items-center gap-2 font-display text-lg font-bold">
+            {{icon "user" "h-5 w-5 text-clay-600"}} Ditangani oleh
+          </h2>
+
+          {{/* A compact row rather than the therapist_card partial: that card
+               carries its own layanan chips, which on this page would link back
+               to the layanan the visitor is already reading. */}}
+          <ul class="mt-4 space-y-2">
+            {{range .Data.Therapists}}
+              <li>
+                <a href="/terapis/{{.Slug}}"
+                   class="flex items-center gap-3 rounded-card border border-line bg-paper p-3 transition hover:border-clay-600 hover:shadow-card">
+                  <span class="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-paper-2 text-ink-faint">
+                    {{if .ImagePath.Valid}}
+                      <img src="/static/{{nullstr .ImagePath}}" alt=""
+                           width="44" height="44" loading="lazy" decoding="async"
+                           class="h-full w-full object-cover">
+                    {{else}}
+                      {{icon "user" "h-4 w-4"}}
+                    {{end}}
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block font-semibold">{{.Name}}</span>
+                    {{if .Specialization.Valid}}
+                      <span class="block text-xs text-ink-soft">{{nullstr .Specialization}}</span>
+                    {{end}}
+                  </span>
+                  {{icon "arrow-right" "h-4 w-4 shrink-0 text-ink-faint"}}
+                </a>
+              </li>
+            {{end}}
+          </ul>
+
+          <p class="mt-3 text-xs text-ink-faint">
+            Terapis ditentukan menyesuaikan slot yang tersedia saat booking.
+          </p>
+        </section>
+      {{end}}
+
       {{if .Site.Address}}
         <p class="mt-8 flex items-start gap-2 text-sm text-ink-soft">
           {{icon "map-pin" "mt-0.5 h-4 w-4 shrink-0"}}

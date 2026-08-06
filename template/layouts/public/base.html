@@ -293,6 +293,14 @@
         <p class="text-xs font-semibold uppercase tracking-wider text-paper/50">Jelajahi</p>
         <ul class="mt-3 space-y-2 text-sm">
           <li><a href="/layanan" class="transition hover:text-paper">Layanan</a></li>
+          {{/* Conditional for the same reason the nav entry is: an operator who
+               has published no therapist should not be sent to an empty section.
+               This list is hardcoded rather than driven by publicNav — the
+               labels differ ("Riwayat booking") and it carries /profil, which is
+               not a nav entry — so the two have to be kept in step by hand. */}}
+          {{if hasTerapis}}
+            <li><a href="/terapis" class="transition hover:text-paper">Terapis</a></li>
+          {{end}}
           <li><a href="/booking" class="transition hover:text-paper">Booking</a></li>
           <li><a href="/riwayat" class="transition hover:text-paper">Riwayat booking</a></li>
           <li><a href="/profil" class="transition hover:text-paper">Profil</a></li>

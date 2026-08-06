@@ -429,13 +429,13 @@ func Load() (*Config, error) {
 		Map: MapConfig{
 			TileURL:         getString("MAP_TILE_URL", "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"),
 			TileAttribution: getString("MAP_TILE_ATTRIBUTION", "© OpenStreetMap"),
-			// Yogyakarta, at a zoom that shows the city rather than a street. Only
-			// ever seen by someone who has no pin and has not let the browser locate
-			// them, and it exists so that state is a recognisable place instead of
-			// the Atlantic at 0°,0°.
-			DefaultLat:  getString("MAP_DEFAULT_LAT", "-7.797068"),
-			DefaultLng:  getString("MAP_DEFAULT_LNG", "110.370529"),
-			DefaultZoom: getInt("MAP_DEFAULT_ZOOM", 12),
+			// Padang, at a zoom that shows the whole administrative city rather than
+			// a street. Only ever seen by someone who has no pin and has not let the
+			// browser locate them, and it exists so that state is a recognisable
+			// place instead of the Atlantic at 0°,0°.
+			DefaultLat:  getString("MAP_DEFAULT_LAT", "-0.949240"),
+			DefaultLng:  getString("MAP_DEFAULT_LNG", "100.354270"),
+			DefaultZoom: getInt("MAP_DEFAULT_ZOOM", 11),
 		},
 	}
 

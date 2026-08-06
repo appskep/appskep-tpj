@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	AddTherapistService(ctx context.Context, arg AddTherapistServiceParams) error
 	BookingCodeTaken(ctx context.Context, bookingCode string) (bool, error)
 	// Releases the slot: the caller must call ReleaseSlot iff RowsAffected() == 1.
 	CancelBooking(ctx context.Context, arg CancelBookingParams) (sql.Result, error)
@@ -46,6 +47,7 @@ type Querier interface {
 	// How many slots a date range holds, without pulling them. The admin calendar
 	// uses it to decide whether a range is worth rendering at all.
 	CountSlotsInRange(ctx context.Context, arg CountSlotsInRangeParams) (int64, error)
+	CountTherapistsAdmin(ctx context.Context, search string) (int64, error)
 	CountUsers(ctx context.Context, arg CountUsersParams) (int64, error)
 	// activity_logs — audit trail for admin actions and booking state changes.
 	// meta is a JSON column: pass NULL or valid JSON, never an empty string.
@@ -86,17 +88,24 @@ type Querier interface {
 	// The Phase 5 generator. RowsAffected() == 0 means "already existed, skipped" —
 	// that is the created/skipped counter, and what makes a re-run a no-op.
 	CreateSlotIfAbsent(ctx context.Context, arg CreateSlotIfAbsentParams) (sql.Result, error)
+	CreateTherapist(ctx context.Context, arg CreateTherapistParams) (sql.Result, error)
 	// Blocked by fk_bookings_service (RESTRICT) once any booking references it. The
 	// handler checks CountBookingsForService first and offers deactivation instead.
 	DeleteService(ctx context.Context, id int64) (sql.Result, error)
 	DeleteSetting(ctx context.Context, settingKey string) error
 	// RowsAffected() == 0 means the slot had bookings and was left alone.
 	DeleteSlotIfUnbooked(ctx context.Context, id int64) (sql.Result, error)
+	// Nothing references a therapist except therapist_services, which CASCADEs, so
+	// unlike DeleteService this can never be blocked by a foreign key.
+	DeleteTherapist(ctx context.Context, id int64) (sql.Result, error)
+	DeleteTherapistServices(ctx context.Context, therapistID int64) error
 	DeleteUnbookedSlotsInRange(ctx context.Context, arg DeleteUnbookedSlotsInRangeParams) (sql.Result, error)
 	// Releases the slot: the caller must call ReleaseSlot iff RowsAffected() == 1.
 	ExpireBooking(ctx context.Context, id int64) (sql.Result, error)
 	// The public detail page. Inactive services must 404, not render.
 	GetActiveServiceBySlug(ctx context.Context, slug string) (Service, error)
+	// The public profile page. Inactive therapists must 404, not render.
+	GetActiveTherapistBySlug(ctx context.Context, slug string) (Therapist, error)
 	GetBooking(ctx context.Context, id int64) (Booking, error)
 	// Everything the admin detail page renders, in one round trip. The customer's
 	// own page uses GetBookingDetailByCode; this one is by id, carries the slot's
@@ -161,12 +170,18 @@ type Querier interface {
 	// constraint error. It is only a nicety: the real guarantee is the unique index
 	// uq_bookings_active_slot_user, which cannot be bypassed by application code.
 	GetSlotHoldingBookingForUser(ctx context.Context, arg GetSlotHoldingBookingForUserParams) (Booking, error)
+	// therapists — the terapis profiles, and which layanan each one handles.
+	GetTherapist(ctx context.Context, id int64) (Therapist, error)
 	// users — the local mirror of the Appskep identity.
 	//
 	// Nothing here authenticates anyone. Identity comes from the Appskep JWT; these
 	// queries only keep the local mirror in step with it.
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByAppskepID(ctx context.Context, appskepUserID uint64) (User, error)
+	// Whether the public site advertises the terapis section at all. EXISTS rather
+	// than a COUNT: the answer is a yes/no, and idx_therapists_active_sort makes it
+	// an index-only lookup.
+	HasActiveTherapists(ctx context.Context) (bool, error)
 	// The increment. Runs inside the booking transaction, after GetSlotForUpdate.
 	//
 	// The WHERE clause is defence in depth, not the primary safety mechanism — the
@@ -176,6 +191,10 @@ type Querier interface {
 	HoldSlot(ctx context.Context, id int64) (sql.Result, error)
 	// Public listing. Includes coming-soon services: they are shown with a label.
 	ListActiveServices(ctx context.Context) ([]Service, error)
+	// Public listing.
+	ListActiveTherapists(ctx context.Context) ([]Therapist, error)
+	// The reverse link, for the strip on /layanan/{slug}.
+	ListActiveTherapistsForService(ctx context.Context, serviceID int64) ([]Therapist, error)
 	ListActivityLogsByUser(ctx context.Context, arg ListActivityLogsByUserParams) ([]ActivityLog, error)
 	// The booking detail timeline in the admin panel.
 	ListActivityLogsForEntity(ctx context.Context, arg ListActivityLogsForEntityParams) ([]ActivityLog, error)
@@ -296,11 +315,25 @@ type Querier interface {
 	ListPaymentsForExport(ctx context.Context, arg ListPaymentsForExportParams) ([]ListPaymentsForExportRow, error)
 	// The dashboard's "pembayaran terbaru" card.
 	ListRecentPaidPayments(ctx context.Context, limit int32) ([]ListRecentPaidPaymentsRow, error)
+	// Drives the admin form's checkbox state. Deliberately unfiltered: a tag
+	// pointing at a deactivated layanan must still be visible to the service layer,
+	// which decides what to do with it.
+	ListServiceIDsForTherapist(ctx context.Context, therapistID int64) ([]int64, error)
+	// One query for the whole /terapis grid, grouped by therapist_id in Go. The
+	// alternative is a ListServicesForTherapist per card.
+	ListServiceTagsForActiveTherapists(ctx context.Context) ([]ListServiceTagsForActiveTherapistsRow, error)
 	// Pass "%" for an empty search box.
 	ListServicesAdmin(ctx context.Context, arg ListServicesAdminParams) ([]Service, error)
+	// ---------------------------------------------------------------------------
+	// therapist_services
+	// ---------------------------------------------------------------------------
+	// The public profile page. Active layanan only, in the catalogue's own order.
+	ListServicesForTherapist(ctx context.Context, therapistID int64) ([]Service, error)
 	ListSettings(ctx context.Context) ([]Setting, error)
 	// The admin calendar / list view.
 	ListSlotsByDateRange(ctx context.Context, arg ListSlotsByDateRangeParams) ([]ScheduleSlot, error)
+	// Pass "%" for an empty search box.
+	ListTherapistsAdmin(ctx context.Context, arg ListTherapistsAdminParams) ([]Therapist, error)
 	// Pass "%" for an empty search box: name and email are NOT NULL, so LIKE '%'
 	// matches every row and no SQL branching is needed.
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
@@ -350,6 +383,7 @@ type Querier interface {
 	SetServiceComingSoon(ctx context.Context, arg SetServiceComingSoonParams) error
 	SetSlotActive(ctx context.Context, arg SetSlotActiveParams) error
 	SetSlotActiveInRange(ctx context.Context, arg SetSlotActiveInRangeParams) (sql.Result, error)
+	SetTherapistActive(ctx context.Context, arg SetTherapistActiveParams) error
 	SetUserActive(ctx context.Context, arg SetUserActiveParams) error
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) error
 	// Dashboard revenue. The explicit CAST to DECIMAL is what makes sqlc type this
@@ -357,6 +391,8 @@ type Querier interface {
 	// CHAR does too. A string is also what keeps money off float64 all the way to
 	// util.Rupiah. COALESCE, because SUM over no rows is NULL, not 0.
 	SumPaidBetween(ctx context.Context, arg SumPaidBetweenParams) (SumPaidBetweenRow, error)
+	// Pass 0 as the id when creating, so no row is excluded.
+	TherapistSlugTaken(ctx context.Context, arg TherapistSlugTakenParams) (bool, error)
 	// The only booking field an admin may edit freely. Everything else is either a
 	// status transition or a reschedule, both of which move a slot.
 	UpdateBookingNotes(ctx context.Context, arg UpdateBookingNotesParams) error
@@ -373,6 +409,11 @@ type Querier interface {
 	// flag alongside every other field, and leaving it out would make saving the
 	// form silently discard a status change the admin just made.
 	UpdateSlot(ctx context.Context, arg UpdateSlotParams) error
+	// image_path is updated separately so a form submit without a new file cannot
+	// blank an existing photo. slug is absent for the same reason it is absent from
+	// UpdateService: it is the public URL and is allocated once, at creation.
+	UpdateTherapist(ctx context.Context, arg UpdateTherapistParams) error
+	UpdateTherapistImage(ctx context.Context, arg UpdateTherapistImageParams) error
 	UpdateUserAvatar(ctx context.Context, arg UpdateUserAvatarParams) error
 	// Only the locally-owned fields. name and email belong to Appskep and are
 	// refreshed from the JWT on each login.

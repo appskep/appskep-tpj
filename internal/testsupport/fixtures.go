@@ -1,12 +1,14 @@
 package testsupport
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"maps"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -194,7 +196,7 @@ func (e *Env) Booking(in BookingInput) sqlc.Booking {
 	}
 	// Required since the copy fix: the therapist travels to this address.
 	if in.Address == "" {
-		in.Address = "Jl. Kaliurang KM 5 No. 12, Sleman"
+		in.Address = "Jl. Khatib Sulaiman No. 12, Padang Utara"
 	}
 
 	booking, err := e.Deps.Booking.Create(context.Background(), service.CreateInput{
@@ -463,4 +465,58 @@ func mustJSON(v any) []byte {
 		panic("testsupport: marshalling fixture: " + err.Error())
 	}
 	return b
+}
+
+// PNGUpload builds a *multipart.FileHeader carrying a real 1x1 PNG, for the
+// tests that exercise an image upload end to end.
+//
+// A genuine PNG rather than arbitrary bytes with a .png name, because
+// ImageStore.Save derives the stored extension from http.DetectContentType and
+// ignores the filename entirely — bytes that do not sniff as an image are
+// rejected as ErrUnsupportedType, whatever they are called.
+//
+// It goes through multipart.Reader rather than constructing a FileHeader
+// literal: the unexported fields that make Open() work are only filled in by the
+// parser, so a hand-built header opens to nothing.
+func PNGUpload(t *testing.T, filename string) *multipart.FileHeader {
+	t.Helper()
+
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+
+	part, err := w.CreateFormFile("image", filename)
+	if err != nil {
+		t.Fatalf("testsupport: creating upload part: %v", err)
+	}
+	if _, err := part.Write(onePixelPNG); err != nil {
+		t.Fatalf("testsupport: writing upload part: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("testsupport: closing upload writer: %v", err)
+	}
+
+	form, err := multipart.NewReader(&body, w.Boundary()).ReadForm(1 << 20)
+	if err != nil {
+		t.Fatalf("testsupport: parsing upload: %v", err)
+	}
+	t.Cleanup(func() { _ = form.RemoveAll() })
+
+	headers := form.File["image"]
+	if len(headers) == 0 {
+		t.Fatal("testsupport: upload produced no file part")
+	}
+	return headers[0]
+}
+
+// onePixelPNG is a valid 1x1 opaque PNG — the smallest thing that sniffs as
+// image/png.
+var onePixelPNG = []byte{
+	0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a,
+	0x00, 0x00, 0x00, 0x0d, 'I', 'H', 'D', 'R',
+	0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+	0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde,
+	0x00, 0x00, 0x00, 0x0c, 'I', 'D', 'A', 'T',
+	0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00,
+	0x18, 0xdd, 0x8d, 0xb0,
+	0x00, 0x00, 0x00, 0x00, 'I', 'E', 'N', 'D', 0xae, 0x42, 0x60, 0x82,
 }

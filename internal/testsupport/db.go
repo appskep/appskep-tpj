@@ -283,6 +283,11 @@ func reset(t *testing.T, store *repository.Store) {
 		// comes back with the seed.
 		"DELETE FROM users",
 		"DELETE FROM services",
+		// Explicitly, not by relying on ON DELETE CASCADE: FOREIGN_KEY_CHECKS = 0
+		// above disables cascades as well as checks, so deleting the parents alone
+		// would leave orphan join rows pointing at ids the re-seed then recycles.
+		"TRUNCATE TABLE therapist_services",
+		"DELETE FROM therapists",
 		// Settings must be deleted, not left to the seed.
 		//
 		// seed_dev.sql ends its settings INSERT with `ON DUPLICATE KEY UPDATE

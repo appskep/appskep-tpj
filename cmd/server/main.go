@@ -56,6 +56,10 @@ const (
 	// maxAvatarBytes is half the service cap: an avatar renders at 28px in the
 	// header chip, so 1 MB is already far more than it can ever show.
 	maxAvatarBytes = 1 << 20
+
+	// A therapist photo renders at the same card size a service image does, so it
+	// shares maxImageBytes rather than earning a third number to keep in step.
+	therapistImageDir = "uploads/therapists"
 )
 
 func main() {
@@ -112,6 +116,21 @@ func run() error {
 		return err
 	}
 
+	therapistPhotos, err := upload.New(staticDir, therapistImageDir, maxImageBytes)
+	if err != nil {
+		return err
+	}
+
+	// Built before the renderer, not in the Deps literal below, because the
+	// renderer takes it: the public nav asks it whether the terapis section has
+	// anything in it. One instance shared by both, so there is one cache.
+	therapistCtx, cancelTherapists := context.WithTimeout(context.Background(), 5*time.Second)
+	therapists, err := service.NewTherapists(therapistCtx, store, therapistPhotos, log)
+	cancelTherapists()
+	if err != nil {
+		return err
+	}
+
 	// A stylesheet older than the templates it dresses is a failed boot in
 	// production, for the same reason a malformed template is: it is a defect no
 	// request will report. See checkStylesheetFresh.
@@ -121,7 +140,7 @@ func run() error {
 
 	// Parsing every template at startup makes a malformed template a failed boot
 	// instead of a 500 on the request that first reaches it.
-	renderer, err := view.New(os.DirFS(templateDir), cfg, log, settings)
+	renderer, err := view.New(os.DirFS(templateDir), cfg, log, settings, therapists)
 	if err != nil {
 		return err
 	}
@@ -160,13 +179,14 @@ func run() error {
 	}
 
 	deps := &app.Deps{
-		Cfg:      cfg,
-		Store:    store,
-		Log:      log,
-		View:     renderer,
-		Settings: settings,
-		Catalog:  service.NewCatalog(store, images),
-		Schedule: schedule,
+		Cfg:        cfg,
+		Store:      store,
+		Log:        log,
+		View:       renderer,
+		Settings:   settings,
+		Catalog:    service.NewCatalog(store, images),
+		Therapists: therapists,
+		Schedule:   schedule,
 		// Booking shares the Schedule instance rather than building its own, so
 		// the booking window has one definition (Schedule.Window) and the layanan
 		// page cannot advertise a slot the booking form would refuse.

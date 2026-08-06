@@ -44,6 +44,19 @@ func Routes(d *app.Deps) chi.Router {
 		r.Post("/{id}/segera", layanan.ToggleComingSoon)
 	})
 
+	// Terapis. The same shape as layanan minus the coming-soon toggle: a
+	// therapist is either published or not.
+	terapis := handler.NewTerapis(d)
+	r.Route("/terapis", func(r chi.Router) {
+		r.Get("/", terapis.List)
+		r.Post("/", terapis.Create)
+		r.Get("/baru", terapis.New)
+		r.Get("/{id}/edit", terapis.Edit)
+		r.Post("/{id}", terapis.Update)
+		r.Post("/{id}/hapus", terapis.Delete)
+		r.Post("/{id}/aktif", terapis.ToggleActive)
+	})
+
 	// Penjadwalan (schedule slots). The generator posts to the same path twice —
 	// once for the preview, once with `konfirmasi=1` to commit — so a preview can
 	// never be mistaken for a write.

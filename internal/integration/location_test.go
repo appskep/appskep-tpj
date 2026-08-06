@@ -23,8 +23,8 @@ import (
 // chose not to fill it in, and nothing downstream would complain.
 
 const (
-	testLat = "-7.7970680"
-	testLng = "110.3705290"
+	testLat = "-0.9492400"
+	testLng = "100.3542700"
 )
 
 // getBooking renders GET /booking at step 3 as a signed-in user, and returns the
@@ -102,8 +102,8 @@ func TestBookingStoresTheMapPin(t *testing.T) {
 		SlotID: slot.ID,
 		// Deliberately under-precise on the way in: the service normalises to 7 dp,
 		// so what comes back out must be padded rather than left as typed.
-		Latitude:  "-7.797068",
-		Longitude: "110.370529",
+		Latitude:  "-0.949240",
+		Longitude: "100.354270",
 	})
 
 	detail, err := env.Deps.Booking.DetailForUser(context.Background(),
@@ -161,7 +161,7 @@ func TestBookingRefusesHalfAPin(t *testing.T) {
 		Name:        "Budi Santoso",
 		Phone:       "081234567890",
 		Address:     "Jl. Contoh No. 1",
-		Latitude:    "-7.797068",
+		Latitude:    "-0.949240",
 	})
 
 	var ve *service.ValidationError
@@ -192,8 +192,8 @@ func TestProfileStoresAndClearsTheMapPin(t *testing.T) {
 	saved, err := env.Deps.Profile.Update(context.Background(), user.ID, service.ProfileInput{
 		Phone:     "081234567890",
 		Address:   "Jl. Contoh No. 1",
-		Latitude:  "-7.797068",
-		Longitude: "110.370529",
+		Latitude:  "-0.949240",
+		Longitude: "100.354270",
 	})
 	if err != nil {
 		t.Fatalf("Profile.Update: %v", err)
@@ -225,9 +225,9 @@ func TestBookingFormPrefillsFromTheLastBooking(t *testing.T) {
 		UserID:    user.ID,
 		SlotID:    env.FutureSlot(3, 1).ID,
 		Phone:     "081298765432",
-		Address:   "Jl. Kaliurang KM 7 No. 3, Sleman",
-		Latitude:  "-7.797068",
-		Longitude: "110.370529",
+		Address:   "Jl. S. Parman No. 3, Padang Utara",
+		Latitude:  "-0.949240",
+		Longitude: "100.354270",
 	})
 
 	// A different slot for the next booking: the one above is full, and the form
@@ -238,7 +238,7 @@ func TestBookingFormPrefillsFromTheLastBooking(t *testing.T) {
 	assertInputValue(t, body, "latitude", testLat)
 	assertInputValue(t, body, "longitude", testLng)
 	// The address is a textarea, so it has no value= to look for.
-	if !strings.Contains(body, "Jl. Kaliurang KM 7 No. 3, Sleman") {
+	if !strings.Contains(body, "Jl. S. Parman No. 3, Padang Utara") {
 		t.Error("the form does not carry the previous booking's address")
 	}
 }
@@ -255,9 +255,9 @@ func TestTheProfileWinsOverTheLastBooking(t *testing.T) {
 		UserID:    user.ID,
 		SlotID:    env.FutureSlot(3, 1).ID,
 		Phone:     "081298765432",
-		Address:   "Jl. Kaliurang KM 7 No. 3, Sleman",
-		Latitude:  "-7.797068",
-		Longitude: "110.370529",
+		Address:   "Jl. S. Parman No. 3, Padang Utara",
+		Latitude:  "-0.949240",
+		Longitude: "100.354270",
 	})
 
 	// A profile holding the phone number and nothing else: the phone must come
@@ -272,7 +272,7 @@ func TestTheProfileWinsOverTheLastBooking(t *testing.T) {
 
 	assertInputValue(t, body, "telepon", "081200000000")
 	assertInputValue(t, body, "latitude", testLat)
-	if !strings.Contains(body, "Jl. Kaliurang KM 7 No. 3, Sleman") {
+	if !strings.Contains(body, "Jl. S. Parman No. 3, Padang Utara") {
 		t.Error("an address saved in no profile was not taken from the last booking")
 	}
 }
@@ -327,8 +327,8 @@ func TestTheReviewPanelRePostsTheMapPin(t *testing.T) {
 		"nama":      {"Budi Santoso"},
 		"telepon":   {"081234567890"},
 		"alamat":    {"Jl. Contoh No. 1"},
-		"latitude":  {"-7.797068"},
-		"longitude": {"110.370529"},
+		"latitude":  {"-0.949240"},
+		"longitude": {"100.354270"},
 	}
 
 	r := httptest.NewRequest(http.MethodPost, "/booking", strings.NewReader(form.Encode()))
@@ -358,8 +358,8 @@ func TestTheReviewPanelRePostsTheMapPin(t *testing.T) {
 	// what the user typed — so the confirm form re-posts that and Create
 	// normalises again on the commit. Asserting on the normalised form here would
 	// be asserting on a behaviour the codebase deliberately does not have.
-	assertInputValue(t, body, "latitude", "-7.797068")
-	assertInputValue(t, body, "longitude", "110.370529")
+	assertInputValue(t, body, "latitude", "-0.949240")
+	assertInputValue(t, body, "longitude", "100.354270")
 
 	// Nothing written yet — the review is a dry run.
 	if got := env.BookedCount(slot.ID); got != 0 {

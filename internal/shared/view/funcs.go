@@ -85,6 +85,7 @@ type NavItem struct {
 var (
 	publicNav = []NavItem{
 		{Href: "/layanan", Label: "Layanan"},
+		{Href: "/terapis", Label: "Terapis"},
 		{Href: "/booking", Label: "Booking"},
 		{Href: "/riwayat", Label: "Riwayat"},
 	}
@@ -96,6 +97,9 @@ var (
 		{Href: "/admin/booking", Label: "Booking", Icon: "receipt"},
 		{Href: "/admin/jadwal", Label: "Penjadwalan", Icon: "calendar-days"},
 		{Href: "/admin/layanan", Label: "Layanan", Icon: "sparkles"},
+		// "user", not "users": the latter is Pengguna's, and two sidebar entries
+		// sharing an icon is two entries the operator has to read to tell apart.
+		{Href: "/admin/terapis", Label: "Terapis", Icon: "user"},
 		{Href: "/admin/pembayaran", Label: "Pembayaran", Icon: "credit-card"},
 		{Href: "/admin/users", Label: "Pengguna", Icon: "users"},
 		{Href: "/admin/pengaturan", Label: "Pengaturan", Icon: "settings"},
@@ -144,8 +148,12 @@ func (r *Renderer) funcMap() template.FuncMap {
 		"loginURL":  r.loginURL,
 		"authURL":   func() string { return r.cfg.Auth.URL },
 		"activeNav": activeNav,
-		"publicNav": func() []NavItem { return publicNav },
+		"publicNav": r.visiblePublicNav,
 		"adminNav":  func() []NavItem { return adminNav },
+		// hasTerapis exists for the footer's "Jelajahi" list, which is hardcoded
+		// rather than driven by publicNav — its labels differ and it carries
+		// /profil, which is not a nav entry. The two must be kept in step by hand.
+		"hasTerapis": func() bool { return r.therapists.HasActive() },
 
 		// --- Small predicates templates would otherwise fake with string tricks ---
 		"hasPrefix": strings.HasPrefix,
@@ -229,6 +237,37 @@ func (r *Renderer) loginURL(next string) string {
 		next = "/"
 	}
 	return "/login?next=" + url.QueryEscape(next)
+}
+
+// hrefTerapis is the one nav entry that depends on data existing.
+const hrefTerapis = "/terapis"
+
+// visiblePublicNav drops nav entries whose section has nothing in it.
+//
+// Terapis is the only conditional one, and it is named here rather than given a
+// general mechanism: Layanan, Booking and Riwayat are structural — the business
+// always has them — so a predicate field on NavItem would be scaffolding built
+// for a single case. Generalise if a second appears.
+//
+// Why it is conditional at all: the section is content an operator fills in, and
+// until they have, a menu entry leading to "Belum ada profil terapis" advertises
+// a room with nothing in it. Same rule as the coming-soon CTA, which is replaced
+// rather than left looking clickable.
+//
+// The filtered result is a copy. Filtering the package slice in place would
+// mutate shared state and the entry could never come back.
+func (r *Renderer) visiblePublicNav() []NavItem {
+	if r.therapists.HasActive() {
+		return publicNav
+	}
+
+	out := make([]NavItem, 0, len(publicNav))
+	for _, item := range publicNav {
+		if item.Href != hrefTerapis {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 // activeNav reports whether a nav item should be marked current. A section index

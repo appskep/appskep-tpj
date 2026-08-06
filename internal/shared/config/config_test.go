@@ -325,7 +325,7 @@ func TestLoadValidation(t *testing.T) {
 			value: "https://tile.example.org/{z}/{x}.png", want: "MAP_TILE_URL",
 		},
 		{name: "latitude out of range", key: "MAP_DEFAULT_LAT", value: "91", want: "MAP_DEFAULT_LAT"},
-		{name: "latitude not a number", key: "MAP_DEFAULT_LAT", value: "yogya", want: "MAP_DEFAULT_LAT"},
+		{name: "latitude not a number", key: "MAP_DEFAULT_LAT", value: "padang", want: "MAP_DEFAULT_LAT"},
 		{name: "longitude out of range", key: "MAP_DEFAULT_LNG", value: "-181", want: "MAP_DEFAULT_LNG"},
 		{name: "zoom of zero", key: "MAP_DEFAULT_ZOOM", value: "0", want: "MAP_DEFAULT_ZOOM"},
 		{name: "zoom past what tiles exist for", key: "MAP_DEFAULT_ZOOM", value: "25", want: "MAP_DEFAULT_ZOOM"},

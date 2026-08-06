@@ -58,7 +58,7 @@ func TestBookingCreatedIsNotified(t *testing.T) {
 
 	user := env.User(9970)
 	slot := env.FutureSlot(3, 1)
-	const address = "Jl. Kaliurang KM 5 No. 12, Sleman"
+	const address = "Jl. Khatib Sulaiman No. 12, Padang Utara"
 	booking := env.Booking(testsupport.BookingInput{
 		UserID: user.ID, SlotID: slot.ID, Address: address,
 	})

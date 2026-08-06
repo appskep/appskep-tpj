@@ -1,0 +1,139 @@
+{{/*
+  /terapis/{slug} — one therapist.
+
+  Deliberately not a booking page. A therapist cannot be picked at booking time
+  (parallel therapists are modelled as slot capacity, not as rows), so the CTA
+  here is the ordinary booking link, and saying otherwise would promise something
+  the booking form cannot honour.
+
+  Layout mirrors layanan-detail.html: photo on the right at lg, copy on the left,
+  and a strip of the others at the foot.
+*/}}
+{{- define "content" -}}
+{{$t := .Data.Therapist}}
+
+<div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
+
+  <nav aria-label="Remah roti" class="text-sm text-ink-soft">
+    <a href="/" class="transition hover:text-ink">Beranda</a>
+    <span class="px-1.5" aria-hidden="true">/</span>
+    <a href="/terapis" class="transition hover:text-ink">Terapis</a>
+    <span class="px-1.5" aria-hidden="true">/</span>
+    <span class="font-medium text-ink">{{$t.Name}}</span>
+  </nav>
+
+  <div class="mt-8 grid gap-10 lg:grid-cols-[1fr_0.85fr] lg:gap-12">
+
+    {{/* -------------------------------------------------------------- FOTO */}}
+    <div class="self-start lg:order-2">
+      <div class="mx-auto aspect-square w-full max-w-xs overflow-hidden rounded-card border border-line bg-paper-2 lg:max-w-none">
+        {{if $t.ImagePath.Valid}}
+          <img src="/static/{{nullstr $t.ImagePath}}" alt="{{$t.Name}}"
+               width="720" height="720" decoding="async"
+               class="h-full w-full object-cover">
+        {{else}}
+          <div class="grid h-full w-full place-items-center text-ink-faint">
+            {{icon "user" "h-12 w-12"}}
+          </div>
+        {{end}}
+      </div>
+    </div>
+
+    {{/* --------------------------------------------------------------- ISI */}}
+    <div class="lg:order-1">
+      <h1 class="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">{{$t.Name}}</h1>
+
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        {{if $t.Specialization.Valid}}
+          <span class="font-display text-xl font-bold text-clay-600">{{nullstr $t.Specialization}}</span>
+        {{end}}
+        {{/* sql.NullInt32, so direct field access rather than the nullint helper
+             — and absent rather than "0 tahun" when it was never filled in. */}}
+        {{if $t.YearsExperience.Valid}}
+          {{template "pill" (printf "%d tahun pengalaman" $t.YearsExperience.Int32)}}
+        {{end}}
+      </div>
+
+      {{if .Data.Bio}}
+        <div class="mt-6 space-y-4 leading-relaxed text-ink-soft">
+          {{range .Data.Bio}}<p>{{.}}</p>{{end}}
+        </div>
+      {{end}}
+
+      {{/* ------------------------------------------------------- MENANGANI */}}
+      {{if .Data.Services}}
+        <section class="mt-10 border-t border-line pt-8">
+          <h2 class="flex items-center gap-2 font-display text-lg font-bold">
+            {{icon "sparkles" "h-5 w-5 text-clay-600"}} Menangani
+          </h2>
+
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+            {{range .Data.Services}}
+              <a href="/layanan/{{.Slug}}"
+                 class="flex items-center justify-between gap-3 rounded-card border border-line bg-paper p-4 transition hover:border-clay-600 hover:shadow-card">
+                <span class="min-w-0">
+                  <span class="block font-semibold">{{.Name}}</span>
+                  <span class="block text-xs text-ink-soft">{{duration .DurationMinutes}} · {{rupiah .Price}}</span>
+                </span>
+                {{icon "arrow-right" "h-4 w-4 shrink-0 text-ink-faint"}}
+              </a>
+            {{end}}
+          </div>
+        </section>
+      {{end}}
+
+      {{/* ----------------------------------------------------- SERTIFIKASI */}}
+      {{if .Data.Certifications}}
+        <section class="mt-10 border-t border-line pt-8">
+          <h2 class="flex items-center gap-2 font-display text-lg font-bold">
+            {{icon "check-circle" "h-5 w-5 text-clay-600"}} Sertifikasi &amp; pelatihan
+          </h2>
+
+          <ul class="mt-4 space-y-2">
+            {{range .Data.Certifications}}
+              <li class="flex items-start gap-2 text-sm text-ink-soft">
+                {{icon "check" "mt-0.5 h-4 w-4 shrink-0 text-success"}}
+                <span>{{.}}</span>
+              </li>
+            {{end}}
+          </ul>
+        </section>
+      {{end}}
+
+      {{/* The CTA is the ordinary booking link: a therapist is not selectable at
+           booking time, so promising one here would be a promise the form cannot
+           keep. */}}
+      <div class="mt-10 rounded-card border border-line bg-paper-2 p-5">
+        <p class="font-display text-lg font-bold">Siap dijadwalkan?</p>
+        <p class="mt-1 text-sm text-ink-soft">
+          Pilih layanan dan jadwalnya dulu. Terapis ditentukan menyesuaikan slot yang tersedia —
+          sebutkan preferensimu lewat WhatsApp kalau ada.
+        </p>
+        <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+          <a href="/booking" class="{{template "btn_primary"}}">
+            Booking Sekarang {{icon "arrow-right" "h-4 w-4"}}
+          </a>
+          {{if .Site.WhatsApp}}
+            <a href="{{waLink .Site.WhatsApp (printf "Halo, saya mau tanya jadwal terapis %s." $t.Name)}}"
+               rel="noopener noreferrer" target="_blank"
+               class="{{template "btn_secondary"}}">
+              {{icon "brand-whatsapp" "h-4 w-4"}} Tanya jadwalnya
+            </a>
+          {{end}}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {{/* ------------------------------------------------------- TERAPIS LAIN */}}
+  {{if .Data.Others}}
+    <section class="mt-16 border-t border-line pt-12 lg:mt-24">
+      <h2 class="font-display text-2xl font-extrabold">Terapis lain</h2>
+      <div class="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {{range .Data.Others}}{{template "therapist_card" .}}{{end}}
+      </div>
+    </section>
+  {{end}}
+</div>
+
+{{- end -}}

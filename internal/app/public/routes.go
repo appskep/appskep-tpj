@@ -35,6 +35,10 @@ func Routes(d *app.Deps) chi.Router {
 	r.Get("/layanan", layanan.List)
 	r.Get("/layanan/{slug}", layanan.Detail)
 
+	terapis := handler.NewTerapis(d)
+	r.Get("/terapis", terapis.List)
+	r.Get("/terapis/{slug}", terapis.Detail)
+
 	session := handler.NewSession(d)
 	r.Get("/login", session.Login)
 	// POST, not GET: a GET that ends a session is triggerable by any cross-site

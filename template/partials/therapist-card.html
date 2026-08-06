@@ -1,0 +1,65 @@
+{{/*
+  Terapis card. Takes a handler.therapistCard — an sqlc.Therapist embedded beside
+  the layanan tags, because a partial receives exactly one value and there is no
+  dict helper. Field access is unchanged by the promotion.
+
+  Modelled on service_card, with one deliberate difference: the photo is a circle
+  rather than a 4:3 block. A face reads better cropped to a round frame, and it
+  keeps a therapist card from being mistaken for a layanan card at a glance.
+
+  The photo link is aria-hidden and out of the tab order, so the title link below
+  is the single link to the profile a keyboard or screen reader sees.
+*/}}
+{{- define "therapist_card" -}}
+<article class="group flex flex-col items-center rounded-card border border-line bg-paper p-6 text-center shadow-card transition hover:shadow-lifted">
+
+  <a href="/terapis/{{.Slug}}" tabindex="-1" aria-hidden="true"
+     class="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-full bg-paper-2 text-ink-faint">
+    {{if .ImagePath.Valid}}
+      <img src="/static/{{nullstr .ImagePath}}" alt="{{.Name}}"
+           width="192" height="192" loading="lazy" decoding="async"
+           class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]">
+    {{else}}
+      {{/* Placeholder rather than a broken image: image_path is optional and the
+           admin fills it in from /admin/terapis. */}}
+      {{icon "user" "h-8 w-8"}}
+    {{end}}
+  </a>
+
+  <h3 class="mt-4 font-display text-lg font-bold">
+    <a href="/terapis/{{.Slug}}" class="transition hover:text-clay-600">{{.Name}}</a>
+  </h3>
+
+  {{if .Specialization.Valid}}
+    <p class="mt-1 text-sm font-medium text-clay-600">{{nullstr .Specialization}}</p>
+  {{end}}
+
+  {{/* Direct field access rather than the nullint helper: that one takes a
+       sql.NullInt64 and years_experience is INT, so sqlc types it sql.NullInt32.
+       A NULL means "belum diisi", so the pill is absent rather than reading
+       "0 tahun". */}}
+  {{if .YearsExperience.Valid}}
+    <div class="mt-3">{{template "pill" (printf "%d tahun pengalaman" .YearsExperience.Int32)}}</div>
+  {{end}}
+
+  {{if .Bio.Valid}}
+    <p class="mt-3 text-sm leading-relaxed text-ink-soft">{{truncate (nullstr .Bio) 120}}</p>
+  {{end}}
+
+  {{/* mt-auto pins the tag row to the foot of the card, so a row of cards with
+       bios of different lengths still lines its chips up. */}}
+  {{if .Services}}
+    <div class="mt-auto w-full pt-5">
+      <p class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Menangani</p>
+      <div class="mt-2 flex flex-wrap justify-center gap-1.5">
+        {{range .Services}}
+          <a href="/layanan/{{.Slug}}"
+             class="rounded-pill bg-paper-2 px-2.5 py-1 text-xs font-semibold text-ink-soft transition hover:bg-line hover:text-ink">
+            {{.Name}}
+          </a>
+        {{end}}
+      </div>
+    </div>
+  {{end}}
+</article>
+{{- end -}}

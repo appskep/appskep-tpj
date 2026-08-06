@@ -39,7 +39,8 @@ const (
 	MaxDurationMinutes = 480
 )
 
-// maxNameLen matches services.name VARCHAR(150).
+// maxNameLen matches services.name VARCHAR(150), and therapists.name and
+// therapists.specialization, which are the same width.
 const maxNameLen = 150
 
 // slugFallback is the stem used when a name contains nothing a slug can be built
@@ -505,5 +506,6 @@ func allocateSlug(ctx context.Context, q *sqlc.Queries, name string, exclude int
 	return "", fmt.Errorf("no free slug for %q after 50 attempts", name)
 }
 
-// maxSlugLen matches services.slug VARCHAR(150), as util.Slugify enforces.
+// maxSlugLen matches services.slug and therapists.slug, both VARCHAR(150), as
+// util.Slugify enforces.
 const maxSlugLen = 150

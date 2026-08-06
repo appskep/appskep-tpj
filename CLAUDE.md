@@ -246,6 +246,80 @@ One more, found the hard way in Phase 7 and retrofitted to Phase 5:
   widget both carry `name="latitude"`, so a whole-body assertion passes with the confirm
   form's inputs deleted — verified by deleting them.
 
+### The read-only map (settled in Phase 13.8)
+
+- **One widget, two modes.** `data-map-readonly` on the same `[data-map]` element makes
+  `app.js` build a preview instead of a picker: marker not draggable, no click handler, no
+  detect/clear, no auto-detect, coordinates read from `data-map-lat`/`-lng` because there are
+  no inputs. A second map implementation would have re-broken the `turbo:frame-load` handling,
+  the `data-map-ready` idempotence and the `turbo:before-cache` teardown, all of which this
+  inherits for free. `write()` returns early when there are no inputs, so `place()` is
+  identical for both.
+- **A preview must not offer a draggable pin.** An operator who moves a marker that then
+  silently does not save has been lied to — the coming-soon CTA's rule.
+- **The link out is server-rendered markup, not something the script adds.** With `app.js`
+  blocked the canvas is an empty box and "Buka di Google Maps" still works. The map is the
+  convenience; the link is the function, and the function must not depend on JavaScript.
+- **No CSP change is needed and none should be made**: `img-src` already carries the tile host
+  derived from `MAP_TILE_URL`, and a `target="_blank"` link is a navigation, which
+  `connect-src` and `form-action` do not govern and Turbo does not intercept.
+
+## Terapis (settled in Phase 13.7)
+
+`therapists` is public profile content and nothing else. There is deliberately no
+`bookings.therapist_id`: parallel therapists are `schedule_slots.capacity`, and this module
+must never appear in the booking transaction.
+
+- **A many-to-many set is rewritten delete-all-then-insert, in the same transaction as the
+  row it belongs to.** `Therapists.Update` takes a `store.WithTx` where `Catalog.Update` does
+  not, because a half-applied save leaves the profile and its layanan chips disagreeing. No
+  `FOR UPDATE` — the lock-ordering rule is for rows the booking path contends on, and two
+  admins editing one therapist is benign. Rewriting rather than diffing is what makes a
+  resubmitted form idempotent.
+- **`therapist_services` CASCADEs on both sides, and the reason is a wrong error message.**
+  Under RESTRICT, deleting a tagged layanan raises an FK violation that `Catalog.Delete`
+  already maps to `ErrHasBookings` — telling the operator a layanan has bookings when it has
+  none. Every other FK in the schema stays RESTRICT/RESTRICT; a join row is an attribute of
+  the rows it joins, not a financial record. `TestDeletingATaggedServiceIsNotBlocked` fails
+  with that exact message if this is changed back.
+- **A submitted checkbox set is intersected with what the form would have offered, and the
+  rest is dropped silently** — "a disabled input is an affordance, not a guarantee", applied
+  to a group. An unknown id means a hand-crafted POST or a layanan deactivated mid-edit;
+  neither should be a 500 from a foreign key. The consequence, which the form states: editing
+  a therapist tagged to a since-deactivated layanan drops that tag.
+- **`years_experience` is `sql.NullInt32`, so templates use `.Valid`/`.Int32` directly** — the
+  `nullint` FuncMap entry is a `nullInt64` and will not take it. Do not widen the column to
+  suit the helper. NULL is "belum diisi" and is distinct from a stated 0.
+- **`testsupport.reset()` truncates `therapist_services` explicitly.** It runs under
+  `FOREIGN_KEY_CHECKS = 0`, which disables cascades as well as checks, so deleting the parents
+  alone leaves orphan join rows pointing at ids the re-seed recycles.
+
+### The nav entry is data-conditional (settled in Phase 13.9)
+
+- **The public site does not advertise `/terapis` when nothing is published** — nav, mobile
+  drawer, footer and sitemap. A menu entry leading to "Belum ada profil terapis" is the
+  coming-soon CTA's defect moved into the chrome. `/terapis` itself still serves **200** with
+  its empty state (the `empty` partial always carries a way forward), and **`/admin/terapis`
+  is never hidden**: it is where the first therapist gets created.
+- **The answer is an `atomic.Bool` on `service.Therapists`, not a query.** `publicNav` is a
+  zero-argument FuncMap closure — no request, no context, no store — so it cannot read the
+  database at all, and the alternative (`fill()` querying per render) would put a query on
+  every response including `RenderFragment`, which the payment poller hits repeatedly.
+  `Settings`' trade, for the same reason.
+- **All four write methods refresh it, and `Update` is the one that gets forgotten.**
+  `TherapistInput` carries `IsActive`, so `Update` unpublishes without `SetActive` ever
+  running. Removing its `refresh` call fails exactly one test and leaves the other three
+  green. `refresh` logs at WARN and never returns an error — `Audit.Record`'s rule: the row
+  is already committed, so a 500 here would send the admin back to re-submit a form that
+  worked.
+- **The desktop nav and the drawer are one fix; the footer is a second.** Both navs come from
+  `publicNav`, so `Renderer.visiblePublicNav` covers them with no template edit. The footer's
+  "Jelajahi" list is hardcoded — different labels, and it carries `/profil`, which is not a
+  nav entry — so it takes the `hasTerapis` FuncMap entry and must be kept in step by hand.
+- **`testsupport.Reset` and `Env.Exec` bypass the service and do not refresh the flag.** A
+  test that changes therapist rows with raw SQL and then asserts on the menu is measuring a
+  stale cache.
+
 ## Public pages & SEO (settled in Phase 6)
 
 - **A public read goes through the service, not `Store.Queries`.** `Catalog.ListActive`

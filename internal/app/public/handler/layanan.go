@@ -45,6 +45,10 @@ type detailData struct {
 	Upcoming []service.UpcomingDay
 	// Others is every other active service, for the strip at the foot of the page.
 	Others []sqlc.Service
+	// Therapists is who handles this service. Empty when none is tagged and also
+	// when the read failed — the section simply does not render, same rule as
+	// Upcoming above.
+	Therapists []sqlc.Therapist
 }
 
 // List renders the layanan grid.
@@ -108,6 +112,14 @@ func (h *Layanan) Detail(w http.ResponseWriter, r *http.Request) {
 		} else {
 			data.Upcoming = days
 		}
+	}
+
+	// Who handles this layanan. Decoration on top of the description, so a failed
+	// read costs the strip rather than the page.
+	if therapists, err := h.deps.Therapists.ForService(r.Context(), svc.ID); err != nil {
+		h.deps.Log.ErrorContext(r.Context(), "layanan: listing therapists", "slug", slug, "error", err)
+	} else {
+		data.Therapists = therapists
 	}
 
 	if others, err := h.deps.Catalog.ListActive(r.Context()); err != nil {

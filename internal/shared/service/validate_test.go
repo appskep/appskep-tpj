@@ -206,8 +206,8 @@ func TestCoordinate(t *testing.T) {
 		// Normalisation to the DECIMAL(_,7) the column holds is the point: the
 		// value validated has to be the value stored, or a re-rendered form and
 		// the database disagree about where the customer is.
-		{name: "trailing zeros added", value: "-7.797068", limit: 90, want: "-7.7970680"},
-		{name: "excess precision truncated", value: "110.37052912345678", limit: 180, want: "110.3705291"},
+		{name: "trailing zeros added", value: "-0.949240", limit: 90, want: "-0.9492400"},
+		{name: "excess precision truncated", value: "100.35427012345678", limit: 180, want: "100.3542701"},
 		{name: "integer degrees", value: "110", limit: 180, want: "110.0000000"},
 		{name: "zero is a real place", value: "0", limit: 90, want: "0.0000000"},
 
@@ -256,16 +256,16 @@ func TestCoordinatePair(t *testing.T) {
 	}{
 		{name: "both empty is a valid absent pin", lat: "", lng: ""},
 		{name: "whitespace counts as empty", lat: "  ", lng: "\t"},
-		{name: "both set", lat: "-7.797068", lng: "110.370529", wantSet: true},
+		{name: "both set", lat: "-0.949240", lng: "100.354270", wantSet: true},
 
-		{name: "latitude only", lat: "-7.797068", lng: "", wantErr: true},
-		{name: "longitude only", lat: "", lng: "110.370529", wantErr: true},
-		{name: "latitude out of range", lat: "-91", lng: "110.370529", wantErr: true},
+		{name: "latitude only", lat: "-0.949240", lng: "", wantErr: true},
+		{name: "longitude only", lat: "", lng: "100.354270", wantErr: true},
+		{name: "latitude out of range", lat: "-91", lng: "100.354270", wantErr: true},
 		// 110 is a legal latitude-shaped number but not a legal latitude, and
 		// -7 is a legal longitude — so a swapped pair is only caught because the
 		// two limits differ. Worth stating: it is the mistake a caller passing
 		// the arguments the wrong way round would make.
-		{name: "swapped pair", lat: "110.370529", lng: "-7.797068", wantErr: true},
+		{name: "swapped pair", lat: "100.354270", lng: "-0.949240", wantErr: true},
 		{name: "both nonsense", lat: "x", lng: "y", wantErr: true},
 	}
 
@@ -306,12 +306,12 @@ func TestCoordinatePair(t *testing.T) {
 // appeared.
 func TestBookingAndProfileAgreeAboutCoordinates(t *testing.T) {
 	pairs := []struct{ lat, lng string }{
-		{"-7.797068", "110.370529"},
+		{"-0.949240", "100.354270"},
 		{"0", "0"},
 		{"-90", "180"},
 		{"", ""},
-		{"-7.797068", ""},
-		{"200", "110.370529"},
+		{"-0.949240", ""},
+		{"200", "100.354270"},
 	}
 
 	for _, p := range pairs {

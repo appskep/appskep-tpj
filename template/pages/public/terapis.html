@@ -1,0 +1,56 @@
+{{/*
+  /terapis — the people behind the layanan.
+
+  The same shape as layanan.html: a hero band, a grid of cards, and a WhatsApp
+  fallback. The card is the shared therapist_card partial, so this page and the
+  strip at the foot of a profile cannot drift apart.
+
+  The breadcrumb is inlined rather than a partial, matching layanan.html — there
+  is no breadcrumb partial in this codebase and two call sites do not justify
+  inventing one.
+*/}}
+{{- define "content" -}}
+
+<section class="border-b border-line bg-paper-2">
+  <div class="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:py-20">
+    <nav aria-label="Remah roti" class="text-sm text-ink-soft">
+      <a href="/" class="transition hover:text-ink">Beranda</a>
+      <span class="px-1.5" aria-hidden="true">/</span>
+      <span class="font-medium text-ink">Terapis</span>
+    </nav>
+
+    <h1 class="mt-4 max-w-2xl font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
+      Orang yang benar-benar <span class="text-clay-600">datang ke rumahmu</span>
+    </h1>
+    <p class="mt-4 max-w-xl text-lg text-ink-soft">
+      Bukan nama acak di aplikasi. Spesialisasi, pengalaman, dan sertifikasi tiap terapis
+      tertulis di sini — supaya kamu tahu siapa yang akan mengetuk pintu.
+    </p>
+  </div>
+</section>
+
+<section class="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:py-20">
+  {{if .Data.Therapists}}
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {{range .Data.Therapists}}{{template "therapist_card" .}}{{end}}
+    </div>
+  {{else}}
+    {{template "empty" .Data.Empty}}
+  {{end}}
+
+  {{if .Site.WhatsApp}}
+    <div class="mt-14 flex flex-col items-start gap-4 rounded-card border border-line bg-paper-2 p-6 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p class="font-display text-lg font-bold">Punya preferensi terapis?</p>
+        <p class="mt-1 text-sm text-ink-soft">Sebutkan saat booking, kami usahakan sesuai jadwal.</p>
+      </div>
+      <a href="{{waLink .Site.WhatsApp "Halo, saya mau tanya soal terapis yang tersedia."}}"
+         rel="noopener noreferrer" target="_blank"
+         class="{{template "btn_secondary"}}">
+        {{icon "brand-whatsapp" "h-4 w-4"}} Tanya lewat WhatsApp
+      </a>
+    </div>
+  {{end}}
+</section>
+
+{{- end -}}

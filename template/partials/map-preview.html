@@ -1,0 +1,62 @@
+{{/*
+  A read-only map of one stored pin, with a button that hands it to a navigation
+  app. Used by the admin booking detail.
+
+  Takes exactly one value, handler.locationPreview — {Latitude, Longitude,
+  MapsHref, Label, Map}. Same rule as map_picker: a partial receives one value,
+  there is no dict helper, and the payload is assembled in the handler package.
+
+  A partial rather than markup in booking-detail.html because the renderer builds
+  ONE template set per page, so a {{define}} in a page file is invisible to every
+  other page — and a payment or user detail page will want this next.
+
+  ENHANCEMENT ONLY, and this is the half that matters here. With static/js/app.js
+  blocked or Leaflet failing to load, the canvas stays an empty box and the
+  coordinates and the "Buka di Google Maps" button below it still work — which is
+  the thing the operator actually needs. The map is the convenience; the link out
+  is the function. That ordering is why the button is server-rendered markup and
+  not something the script adds.
+
+  data-map-tiles, NOT data-map-tile-url: html/template treats any attribute whose
+  name ends in "url" or "uri" as a URL context and percent-escapes Leaflet's
+  {s}/{z}/{x}/{y} placeholders into %7bs%7d, leaving every tile pointed at a host
+  that does not exist. Renaming the attribute is the whole fix — template.URL is
+  normalised too.
+
+  No new Content-Security-Policy origin: img-src already carries the tile host,
+  derived at boot from MAP_TILE_URL, and a tile is an <img>.
+*/}}
+{{- define "map_preview" -}}
+<div data-map
+     data-map-readonly
+     data-map-lat="{{.Latitude}}"
+     data-map-lng="{{.Longitude}}"
+     data-map-tiles="{{.Map.TileURL}}"
+     data-map-tile-attribution="{{.Map.Attribution}}"
+     data-map-default-lat="{{.Map.DefaultLat}}"
+     data-map-default-lng="{{.Map.DefaultLng}}"
+     data-map-zoom="{{.Map.DefaultZoom}}">
+
+  {{/* z-0 keeps Leaflet's panes under the admin header: the library gives its
+       own layers a z-index in the hundreds, and an unconstrained map slides over
+       a sticky header while scrolling. */}}
+  <div data-map-canvas
+       class="z-0 h-56 w-full overflow-hidden rounded-card border border-line bg-paper-2 sm:h-64"></div>
+
+  <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+    <p class="text-xs text-ink-faint">{{.Latitude}}, {{.Longitude}}</p>
+
+    {{/* target="_blank" on a cross-origin link, so Turbo does not try to swap
+         Google's page into the document. No data-turbo="false" needed: Turbo
+         does not intercept a link that opens in a new tab. */}}
+    <a href="{{.MapsHref}}" target="_blank" rel="noopener noreferrer"
+       class="{{template "btn_secondary"}} px-3 py-2 text-xs">
+      {{icon "external-link" "h-3.5 w-3.5"}} Buka di Google Maps
+    </a>
+  </div>
+
+  {{if .Label}}
+    <p class="mt-1 text-xs text-ink-faint">{{.Label}}</p>
+  {{end}}
+</div>
+{{- end -}}

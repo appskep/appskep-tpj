@@ -35,6 +35,9 @@ Sistem booking & pembayaran online: **Go monolith + chi + sqlc + MariaDB + Go ht
 | 13 | Testing | DONE | 2026-07-28. 33 test files, ~250 tests, in three tiers: pure unit beside the code, DB-backed in `internal/integration`, harness in `internal/testsupport`. Every earlier phase's deferred ask is now permanent, including the concurrency test PLAN.md calls the one that matters most. Stdlib `testing` only. Two real defects found (a 500 on an empty webhook body; a predicate named for a rule it did not implement), and three load-bearing tests proven to fail by breaking the code they guard. CI deferred to Phase 14. See **Phase 13 notes** below |
 | 13.5 | Booking form — prefill & lokasi | DONE | 2026-08-05. Two additions to `/booking` step 3, both requested after Phase 13. The phone and address now fall back **per field** to the customer's last booking when the profile is blank, and a Leaflet map with one draggable pin adds optional coordinates carried through to the admin detail page and the CSV. Leaflet vendored beside Turbo rather than Google Maps JS, which would have cost `style-src 'unsafe-inline'`; the CSP's `img-src` is now **derived from `MAP_TILE_URL`** so the two cannot drift. One real defect found by a test (html/template URL-normalising `data-map-tile-url`, which percent-escaped Leaflet's `{s}/{z}/{x}/{y}` into a host that does not exist — correct-looking markup, blank grey map), and one load-bearing test proven to fail by breaking the code it guards. See **Phase 13.5 notes** below |
 | 13.6 | Ringkasan as a modal | DONE | 2026-08-05. The booking review panel moved into a `<dialog>` that opens over step 3, because the review POST answers 200 through a `data-turbo="false"` form and the browser therefore landed at the top of the page with the panel below the fold. Presentation only — the two-POST flow, the validation and the commit form's hidden inputs are untouched. The one hard part: this dialog has **no trigger to click**, so it is rendered `<dialog open>` by the server and upgraded by `app.js` — without `open` it would be `display: none` and the review would vanish on the no-JS path while every test stayed green. `modal:` / `not-modal:` are the project's first two `@custom-variant`s. Two new tests, both seen red. See **Phase 13.6** below |
+| 13.7 | Terapis (profil terapis) | DONE | 2026-08-06. A new `therapists` entity with public pages (`/terapis`, `/terapis/{slug}`), full admin CRUD, and a many-to-many "layanan yang dikuasai" link cross-linked both ways with `/layanan/{slug}`. **Display-only**: no `bookings.therapist_id` and no slot assignment, so the concurrency design is untouched — `schedule_slots.capacity` remains the model for parallel therapists and this is the marketing side of the same fact. `therapist_services` is the schema's **first CASCADE**, and deliberately: under RESTRICT, deleting a tagged layanan raises an FK violation that `Catalog.Delete` translates to `ErrHasBookings`, telling the operator a layanan has bookings when it has none. Nine new tests, one seen red by flipping that FK back. See **Phase 13.7 notes** below |
+| 13.8 | Admin — peta lokasi booking | DONE | 2026-08-06. The admin booking detail's coordinate pair became a read-only Leaflet map plus a "Buka di Google Maps" button. One widget, two modes: `data-map-readonly` on the same `[data-map]` element app.js already builds, so the tile config, the lazy Leaflet load, the `turbo:frame-load` handling and the CSP all come along unchanged. **No new CSP origin** — `img-src` already carries the tile host, derived at boot from `MAP_TILE_URL`. Two new tests, one seen red |
+| 13.9 | Terapis — sembunyikan menu saat kosong | DONE | 2026-08-06. The public nav, the mobile drawer, the footer and the sitemap stop advertising `/terapis` when no therapist is published — a menu entry leading to "Belum ada profil terapis" is the coming-soon CTA's defect in the chrome. `/terapis` itself still serves **200** with its empty state, and `/admin/terapis` is never hidden: it is where the first therapist gets created. The answer is a cached `atomic.Bool` on `service.Therapists`, loaded at boot and refreshed by all four write methods — the `Settings.Update` → `Reload` pattern, chosen over a per-render query because `fill()` runs on every response including the payment poller's frames. Six new tests; the `Update` one seen red, and it is the only one that catches a missing hook. See **Phase 13.9 notes** below |
 | 14 | Deployment & go-live | TODO | |
 
 ---
@@ -1871,6 +1874,153 @@ Four smaller traps, all of them browser-only:
 form, and the only way back to the summary is another "Lihat ringkasan" — which re-runs
 `Booking.Validate`. Re-opening the same element would show a summary, and commit hidden
 inputs, describing values the customer had since changed.
+
+---
+
+## Phase 13.7 — Terapis (profil terapis)
+
+- [x] `therapists` + `therapist_services` in `0001_schema.sql`; three seeded profiles with tags
+      resolved by slug subquery, so the seed stays re-runnable
+- [x] `query/therapists.sql` → `make sqlc`; `service.Therapists` mirroring `Catalog`
+- [x] `GET /terapis` (grid) + `GET /terapis/{slug}` (profile), 404 on an unknown **or inactive**
+      slug, `article` OG type, photo as `og:image`
+- [x] `/admin/terapis` — table with search + pagination, baru/edit forms, photo upload,
+      Turbo Stream aktif toggle, delete
+- [x] "Layanan yang dikuasai" checkbox group, cross-linked both ways: chips on the profile,
+      a "Ditangani oleh" strip on `/layanan/{slug}`
+- [x] `publicNav` + `adminNav` + footer + `sitemap.xml`
+- [x] Nine tests — five unit over `validateTherapist`, seven DB-backed in `internal/integration`
+      (one of them seen red by flipping `fk_ts_service` back to RESTRICT)
+
+**Acceptance:** ✅ Verified 2026-08-06. `make test` green.
+
+### What this phase settled that had no precedent
+
+- **A many-to-many set is rewritten delete-all-then-insert, inside the same transaction as
+  the row it belongs to.** `Therapists.Update` is the codebase's first service method that has
+  a second table to keep in step, so unlike `Catalog.Update` it takes a transaction — a
+  half-applied save would leave the profile describing one thing and its chips another. No
+  `FOR UPDATE`: two admins editing the same therapist is benign, and the lock-ordering rule
+  exists for rows the booking path contends on. Rewriting rather than diffing is what makes a
+  resubmitted form idempotent, the same property the toggles get from posting the value they
+  want.
+
+- **A join table CASCADEs on both sides, and the reason is a wrong error message, not
+  tidiness.** Every other FK in this schema is RESTRICT/RESTRICT because it points at a row
+  someone's money depends on. A join row is an *attribute* of the two rows it joins. Under
+  RESTRICT, `DELETE FROM services` for a tagged layanan raises a foreign key violation that
+  `Catalog.Delete` already translates to `ErrHasBookings` — so the operator is told "layanan
+  sudah punya booking" about a layanan with zero bookings, and the only fix is either editing
+  `catalog.go` to tell two violations apart or accepting a lie. CASCADE avoids both.
+  `TestDeletingATaggedServiceIsNotBlocked` fails with exactly that message if the FK is
+  changed back, which is how it was verified.
+
+- **A submitted checkbox set is intersected with what the form would have offered, and the
+  remainder is dropped silently.** Phase 5's "a disabled input is an affordance, not a
+  guarantee", applied to a group. An id outside the active-services list means a hand-crafted
+  POST or a layanan deactivated between render and submit; neither is the admin's mistake and
+  neither should be a 500 from an FK violation. The documented consequence, which the form
+  says out loud: editing a therapist tagged to a since-deactivated layanan drops that tag.
+
+- **`years_experience` is `INT NULL`, and the templates reach it by field access.** sqlc types
+  it `sql.NullInt32`; the FuncMap's `nullint` is a `nullInt64` and will not take it. Direct
+  `.Valid` / `.Int32` in the template beats widening the column to BIGINT to suit a helper, or
+  adding a second helper that differs only in width. NULL is "belum diisi" and is deliberately
+  distinct from a stated 0 — there is a unit test for that alone.
+
+- **The harness had to learn the entity too.** `testsupport.New` mirrors `main.go` by design,
+  so a missing `Deps` field there is a nil-pointer panic in the first test that renders the
+  sitemap. `reset()` truncates `therapist_services` **explicitly** rather than relying on the
+  CASCADE: it runs under `FOREIGN_KEY_CHECKS = 0`, which disables cascades as well as checks,
+  so deleting the parents alone would leave orphan join rows pointing at ids the re-seed then
+  recycles.
+
+---
+
+## Phase 13.8 — Admin: peta lokasi booking
+
+- [x] The coordinate pair on `/admin/booking/{id}` became a read-only map with a
+      "Buka di Google Maps" button
+- [x] `data-map-readonly` mode inside the existing `[data-map]` widget in `app.js`
+- [x] `partials/map-preview.html` + `admin/handler/location.go`, mirroring the public
+      `map_picker` / `locationPicker` pair
+- [x] Two tests; the `data-map-readonly` assertion seen red by deleting the attribute
+
+**Acceptance:** ✅ Verified 2026-08-06. `make test` green.
+
+Why: an operator dispatching a therapist needs to know whether the pin agrees with the
+address, and two decimal numbers cannot show that. Phase 13.5 collected the pin and rendered
+it as a link; this is the other half.
+
+### Notes
+
+- **One widget, two modes, rather than a second map implementation.** The preview reuses the
+  picker's element, its lazy Leaflet load, its tile configuration and — the part that would
+  have been re-broken — its `turbo:load` / `turbo:frame-load` / `turbo:before-cache` lifecycle
+  and its `data-map-ready` idempotence flag. `readOnly` gates the marker's `draggable`, the
+  click handler, the detect and clear buttons and the auto-detect; `write()` returns early
+  when there are no inputs, which keeps `place()` identical for both.
+- **A preview must not offer a pin that can be dragged.** An operator who moves a marker that
+  then silently does not save has been lied to — the same rule as the coming-soon CTA and the
+  read-only identity fields on the profile.
+- **The button is server-rendered markup, not something the script adds.** With `app.js`
+  blocked or Leaflet failing to load, the canvas is an empty box and the coordinates and the
+  link out still work. The map is the convenience; the link is the function, and the function
+  is the half that must not depend on JavaScript.
+- **No CSP change.** `img-src` already carries the tile host, derived at boot from
+  `MAP_TILE_URL`, and a tile is an `<img>`. The Google Maps link is a `target="_blank"`
+  navigation, which `connect-src` and `form-action` do not govern and Turbo does not
+  intercept — so no `data-turbo="false"` is needed either.
+- `data-map-tiles`, never `data-map-tile-url`: Phase 13.5's trap applies verbatim to the new
+  partial, and the test asserts the tile template survives byte for byte.
+
+---
+
+## Phase 13.9 — Terapis: sembunyikan menu saat kosong
+
+- [x] `HasActiveTherapists` query + an `atomic.Bool` on `service.Therapists`, loaded at boot
+      and refreshed by `Create`, `Update`, `SetActive` and `Delete`
+- [x] `Renderer.visiblePublicNav` filters the entry out; both `{{range publicNav}}` sites —
+      desktop nav and mobile drawer — are unchanged
+- [x] The footer's hardcoded `<li>` behind a new `hasTerapis` FuncMap entry
+- [x] `Sitemap` omits `/terapis` when there are none, at no extra query
+- [x] Six tests in `internal/integration/therapistnav_test.go`; the `Update` one seen red
+
+**Acceptance:** ✅ Verified 2026-08-06. `make test` green; boot-load path checked by hand
+against a database with every therapist deactivated.
+
+### Notes
+
+- **Why cached and not queried per render.** `publicNav` is a **zero-argument** FuncMap
+  closure — no request, no context, no store — so it cannot ask the database at all. The
+  alternatives were to move the nav onto the `View` envelope and query inside `fill()`, or
+  to cache a flag. `fill()` runs on every `Render`, `RenderFragment` **and** `RenderStream`,
+  which includes the payment page's status poller, and `settings.go:20-23` already rejects a
+  per-render query on a value that changes far more often than "does one therapist exist".
+- **The invalidation lives in the service, not the handlers** — `Settings.Update` calling
+  `Reload` itself, for the reason its comment gives: no handler can forget what no handler
+  does. Four one-line additions, all in one file.
+- **`Update` is a publish path, and that is the whole trap.** Its name says nothing about
+  publishing, but `TherapistInput` carries `IsActive`, so saving the edit form with "Aktif"
+  cleared takes the last therapist offline without `SetActive` ever running. Deleting its
+  refresh call fails **only** `TestTherapistNavHidesWhenUpdateUnpublishesTheLastOne` — the
+  deactivate, delete and create tests all still pass — which is why that is the one that was
+  proven red.
+- **`refresh` can never fail the write it follows.** `Audit.Record`'s contract: the row is
+  already committed, and a 500 here would send the admin back to re-submit a form that
+  worked. It logs at WARN; the cost of a failure is a stale menu until the next write.
+- **Three surfaces, only two of them shared.** The desktop nav and the drawer both come from
+  `publicNav`, so filtering inside the closure fixes both with no template edit. The footer
+  "Jelajahi" list is hardcoded — different labels, and it carries `/profil`, which is not a
+  nav entry — so it needs `hasTerapis` and must be kept in step by hand. The sitemap is the
+  third, and it already had the therapist slice in hand.
+- **The route stays up.** `/terapis` serves 200 with its empty state rather than 404: the
+  `empty` partial always carries a way forward, and an operator following "Lihat di situs
+  publik" deserves an explanation. A test pins this so a later tidy-up cannot change it.
+- **Trap for the next test author:** `testsupport.Reset` and `Env.Exec` write SQL directly
+  and bypass the service, so neither refreshes the flag. A test that changes therapist rows
+  that way and then asserts on the menu is measuring a stale cache, not the code. The file's
+  header comment says so.
 
 ---
 

@@ -211,6 +211,26 @@ type Setting struct {
 	UpdatedAt    time.Time      `json:"updated_at"`
 }
 
+type Therapist struct {
+	ID              int64          `json:"id"`
+	Slug            string         `json:"slug"`
+	Name            string         `json:"name"`
+	Specialization  sql.NullString `json:"specialization"`
+	Bio             sql.NullString `json:"bio"`
+	Certifications  sql.NullString `json:"certifications"`
+	YearsExperience sql.NullInt32  `json:"years_experience"`
+	ImagePath       sql.NullString `json:"image_path"`
+	IsActive        bool           `json:"is_active"`
+	SortOrder       int32          `json:"sort_order"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+}
+
+type TherapistService struct {
+	TherapistID int64 `json:"therapist_id"`
+	ServiceID   int64 `json:"service_id"`
+}
+
 type User struct {
 	ID            int64          `json:"id"`
 	AppskepUserID uint64         `json:"appskep_user_id"`

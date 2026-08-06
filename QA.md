@@ -37,8 +37,14 @@ to escape something, and it renders visibly).
 
 - [ ] `/` — landing
 - [ ] `/layanan` — the three layanan
-- [ ] `/layanan/urut-therapeutic` — detail, with the jadwal-terdekat preview
+- [ ] `/layanan/urut-therapeutic` — detail, with the jadwal-terdekat preview and
+      the "Ditangani oleh" strip
 - [ ] a coming-soon layanan — the CTA is **replaced**, not dimmed or disabled
+- [ ] `/terapis` — the grid, with layanan chips on each card
+- [ ] `/terapis/budi-santoso` — profile, with "Menangani", "Sertifikasi" and
+      "Terapis lain"
+- [ ] a therapist with no photo, no bio and no pengalaman — placeholders, and
+      **no "0 tahun"** where the field was left blank
 - [ ] `/booking` — steps 1, 2 and 3
 - [ ] `/booking` review panel (POST without `konfirmasi=1`) — opens as a modal
 - [ ] `/pembayaran` — with a live hold
@@ -51,6 +57,7 @@ to escape something, and it renders visibly).
 
 - [ ] `/admin` — dashboard figures
 - [ ] `/admin/layanan` — list, form, image upload
+- [ ] `/admin/terapis` — list, form, photo upload, the layanan checkbox group
 - [ ] `/admin/jadwal?view=kalender` and `?view=daftar`
 - [ ] `/admin/jadwal/generate` — preview then commit
 - [ ] `/admin/booking` — list, detail, each of the five actions
@@ -207,6 +214,66 @@ widget, two hosts.
 - [ ] **On plain http** (not localhost): the detect button is absent rather than
       present and silent. `navigator.geolocation` never calls back outside a
       secure context.
+
+### Terapis (Phase 13.7)
+
+The list-page toggle and the 422 re-render are the two `curl` cannot see: a
+Turbo Stream that silently fell back to a redirect still ends on a correct page,
+and a checkbox group that loses its state on a rejected submit looks like the
+admin never ticked anything.
+
+- [ ] **The aktif toggle updates its row without a full page reload.** If the
+      whole page flashes, the Turbo Stream reply is not being applied and the
+      handler fell through to `FlashRedirect`.
+- [ ] **Double-click the toggle.** It settles on the state of the last click, not
+      alternating — it posts the value it wants, never a flip.
+- [ ] **Submit `/admin/terapis/baru` with a blank name but several layanan
+      ticked.** A 422 re-renders with the message beside the field **and every
+      box still ticked**. The file input is cleared by the browser, which is
+      expected; the ticks are not.
+- [ ] **Edit a therapist, untick every layanan, save.** The profile page shows no
+      "Menangani" section, and `/layanan/{slug}` no longer lists them.
+- [ ] **Upload a photo over 2 MB.** A friendly message beside the file input, not
+      a 413 error page.
+- [ ] **Deactivate a therapist**, then open their `/terapis/{slug}` — a 404 with
+      public chrome, and they are gone from the grid and from every layanan page.
+- [ ] The nav entry appears in the desktop nav **and in the mobile drawer**, and
+      is highlighted on `/terapis/{slug}` as well as `/terapis`.
+
+**With every therapist deactivated** (Phase 13.9). The drawer is the one to
+actually open: it is a second `{{range publicNav}}`, and a fix applied to one and
+not the other is invisible at desktop width.
+
+- [ ] **Open the mobile drawer at phone width.** No Terapis entry there either —
+      and Layanan, Booking and Riwayat are all still present.
+- [ ] The footer's "Jelajahi" list has no Terapis link.
+- [ ] **Re-activate one from `/admin/terapis`, then reload the public site
+      without restarting the server.** The entry is back everywhere. If it takes
+      a restart, a `refresh` hook is missing from the write method you used —
+      try the edit form with "Aktif" cleared as well as the list toggle, since
+      `Update` is a separate path from `SetActive`.
+- [ ] `/terapis` still loads (200, empty state) the whole time — hiding the menu
+      must not take the route down.
+- [ ] `/admin/terapis` is in the admin sidebar throughout. That is how the first
+      therapist gets created, so it must never hide.
+
+### The admin booking map (Phase 13.8)
+
+Same class of check as the location picker, and for the same reason — a blocked
+tile and a map that never initialises both look like a correct page from outside.
+
+- [ ] **Open a booking that has a pin.** The map renders with the streets on it
+      and one marker. Grey square + a console `img-src` refusal means the CSP no
+      longer matches `MAP_TILE_URL`; grey square + 404s in the network tab means
+      `data-map-tiles` was percent-escaped — check it for `%7b`.
+- [ ] **The marker does not drag.** A preview that can be moved is a preview that
+      lies about saving.
+- [ ] **"Buka di Google Maps"** opens a new tab on the right point.
+- [ ] **Open a booking with no pin.** No map, no button, and the rest of the page
+      intact.
+- [ ] **With JavaScript off**, the coordinates and the button are still there and
+      still work. That is the half that matters for dispatch.
+- [ ] **Navigate list → detail → back → detail** (Turbo). Still exactly one map.
 
 ## 3. The payment path
 

@@ -48,6 +48,10 @@ type Env struct {
 	// Mail is the mail.Sender behind Deps.Email.
 	Mail *RecordingSender
 
+	// UploadRoot is the t.TempDir every ImageStore writes under, so a test can
+	// assert that a delete actually removed the file and not just the row.
+	UploadRoot string
+
 	// AuthServer, when a test sets one up, is the httptest.Server standing in for
 	// dev-auth.appskep.id. Stored so the refresh tests can adjust it.
 	AuthURL string
@@ -109,13 +113,25 @@ func New(t *testing.T) *Env {
 	if err != nil {
 		t.Fatalf("testsupport: avatar store: %v", err)
 	}
+	therapistPhotos, err := upload.New(uploadRoot, "uploads/therapists", 2<<20)
+	if err != nil {
+		t.Fatalf("testsupport: therapist photo store: %v", err)
+	}
+
+	// Before the renderer, which takes it — the public nav asks it whether the
+	// terapis section has anything in it. Reset above has already re-seeded, so
+	// the presence flag loads against the three seeded therapists.
+	therapists, err := service.NewTherapists(ctx, store, therapistPhotos, log)
+	if err != nil {
+		t.Fatalf("testsupport: therapists: %v", err)
+	}
 
 	// The real template tree, addressed from the repository root rather than
 	// relatively: view.New requires both layouts and at least one page under each,
 	// and both error.html files have to resolve for the 403 and 500 assertions.
 	templates := os.DirFS(filepath.Join(root, "template"))
 
-	renderer, err := view.New(templates, cfg, log, settings)
+	renderer, err := view.New(templates, cfg, log, settings, therapists)
 	if err != nil {
 		t.Fatalf("testsupport: renderer: %v", err)
 	}
@@ -135,13 +151,14 @@ func New(t *testing.T) *Env {
 	}
 
 	deps := &app.Deps{
-		Cfg:      cfg,
-		Store:    store,
-		Log:      log,
-		View:     renderer,
-		Settings: settings,
-		Catalog:  service.NewCatalog(store, images),
-		Schedule: schedule,
+		Cfg:        cfg,
+		Store:      store,
+		Log:        log,
+		View:       renderer,
+		Settings:   settings,
+		Catalog:    service.NewCatalog(store, images),
+		Therapists: therapists,
+		Schedule:   schedule,
 		Booking: service.NewBooking(store, settings, schedule, email,
 			cfg.Midtrans.ExpiryMinutes, cfg.App.Location),
 		Payment: service.NewPayment(store, gateway, log, email,
@@ -157,15 +174,16 @@ func New(t *testing.T) *Env {
 	}
 
 	return &Env{
-		T:       t,
-		Cfg:     cfg,
-		Store:   store,
-		Deps:    deps,
-		Gateway: gateway,
-		Mail:    sender,
-		AuthURL: cfg.Auth.URL,
-		logMu:   logMu,
-		logBuf:  logBuf,
+		T:          t,
+		Cfg:        cfg,
+		Store:      store,
+		Deps:       deps,
+		Gateway:    gateway,
+		Mail:       sender,
+		UploadRoot: uploadRoot,
+		AuthURL:    cfg.Auth.URL,
+		logMu:      logMu,
+		logBuf:     logBuf,
 	}
 }
 
@@ -269,9 +287,9 @@ func Config(t *testing.T) *config.Config {
 			// tile is ever fetched: nothing here runs a browser.
 			TileURL:         "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
 			TileAttribution: "© OpenStreetMap",
-			DefaultLat:      "-7.797068",
-			DefaultLng:      "110.370529",
-			DefaultZoom:     12,
+			DefaultLat:      "-0.949240",
+			DefaultLng:      "100.354270",
+			DefaultZoom:     11,
 		},
 	}
 }

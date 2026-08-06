@@ -90,12 +90,27 @@ func (d *Deps) Sitemap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	therapists, err := d.Therapists.ListActive(r.Context())
+	if err != nil {
+		d.Log.ErrorContext(r.Context(), "sitemap: listing therapists", slog.Any("error", err))
+		http.Error(w, "sitemap unavailable", http.StatusInternalServerError)
+		return
+	}
+
 	// The landing page and the catalogue both change whenever any service does,
-	// so the newest service timestamp is their lastmod too.
+	// so the newest service timestamp is their lastmod too. /terapis gets its own
+	// for the same reason: it changes when a therapist does, not when a price
+	// does.
 	var newest string
 	for _, svc := range services {
 		if iso := util.DateISO(svc.UpdatedAt); iso > newest {
 			newest = iso
+		}
+	}
+	var newestTherapist string
+	for _, t := range therapists {
+		if iso := util.DateISO(t.UpdatedAt); iso > newestTherapist {
+			newestTherapist = iso
 		}
 	}
 
@@ -107,12 +122,30 @@ func (d *Deps) Sitemap(w http.ResponseWriter, r *http.Request) {
 			{Loc: base + "/layanan", LastMod: newest, ChangeFreq: "weekly", Priority: "0.9"},
 		},
 	}
+
+	// /terapis only when there is a therapist to see. The page itself still
+	// serves 200 with its empty state, but pointing a crawler at an empty section
+	// is the sitemap's version of the nav entry that leads nowhere. / and
+	// /layanan are structural and stay unconditional.
+	if len(therapists) > 0 {
+		doc.URLs = append(doc.URLs, sitemapURL{
+			Loc: base + "/terapis", LastMod: newestTherapist, ChangeFreq: "weekly", Priority: "0.8",
+		})
+	}
 	for _, svc := range services {
 		doc.URLs = append(doc.URLs, sitemapURL{
 			Loc:        base + "/layanan/" + svc.Slug,
 			LastMod:    util.DateISO(svc.UpdatedAt),
 			ChangeFreq: "monthly",
 			Priority:   "0.8",
+		})
+	}
+	for _, t := range therapists {
+		doc.URLs = append(doc.URLs, sitemapURL{
+			Loc:        base + "/terapis/" + t.Slug,
+			LastMod:    util.DateISO(t.UpdatedAt),
+			ChangeFreq: "monthly",
+			Priority:   "0.7",
 		})
 	}
 

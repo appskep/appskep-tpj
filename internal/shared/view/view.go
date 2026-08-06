@@ -41,6 +41,11 @@ type Renderer struct {
 	cfg      *config.Config
 	log      *slog.Logger
 	settings *service.Settings
+	// therapists answers one question on the render path — whether the public
+	// terapis section has anything in it — so the nav does not advertise a
+	// section that is empty. It is a cached flag, not a query; see
+	// service.Therapists.HasActive.
+	therapists *service.Therapists
 
 	assetVersion string
 
@@ -56,12 +61,19 @@ type Renderer struct {
 // fsys is rooted at the template directory. It is an fs.FS rather than a path so
 // Phase 14 can swap in an embed.FS to ship a standalone binary with no other
 // change here.
-func New(fsys fs.FS, cfg *config.Config, log *slog.Logger, settings *service.Settings) (*Renderer, error) {
+func New(
+	fsys fs.FS,
+	cfg *config.Config,
+	log *slog.Logger,
+	settings *service.Settings,
+	therapists *service.Therapists,
+) (*Renderer, error) {
 	r := &Renderer{
 		fsys:         fsys,
 		cfg:          cfg,
 		log:          log,
 		settings:     settings,
+		therapists:   therapists,
 		assetVersion: assetVersion(),
 	}
 

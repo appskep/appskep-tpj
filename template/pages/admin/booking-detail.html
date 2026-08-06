@@ -91,19 +91,20 @@
         </div>
         {{/* The pin the customer dropped, if they dropped one. This is the whole
              point of collecting it: coordinates nobody can open are coordinates
-             nobody can drive to. A link out, so no map is loaded here and the
-             Content-Security-Policy is untouched. */}}
-        {{if and .Data.Booking.Latitude.Valid .Data.Booking.Longitude.Valid}}
+             nobody can drive to.
+
+             It used to be the coordinate pair as a bare link. The map is the
+             upgrade — an operator dispatching a therapist needs to see whether
+             the pin is where the address says it is, and two numbers cannot show
+             that. The link out survives as the button inside the partial, which
+             is the half that still works with JavaScript blocked.
+
+             No new CSP origin: img-src already carries the tile host, derived at
+             boot from MAP_TILE_URL. */}}
+        {{if .Data.HasLocation}}
           <div class="sm:col-span-2">
             <dt class="text-xs font-semibold uppercase tracking-wide text-ink-faint">Titik lokasi</dt>
-            <dd class="mt-1 font-medium">
-              <a href="https://www.google.com/maps?q={{nullstr .Data.Booking.Latitude}},{{nullstr .Data.Booking.Longitude}}"
-                 target="_blank" rel="noopener noreferrer"
-                 class="inline-flex items-center gap-1.5 text-clay-600 hover:underline">
-                {{icon "map-pin" "h-4 w-4"}}
-                {{nullstr .Data.Booking.Latitude}}, {{nullstr .Data.Booking.Longitude}}
-              </a>
-            </dd>
+            <dd class="mt-2">{{template "map_preview" .Data.Location}}</dd>
           </div>
         {{end}}
         <div class="sm:col-span-2">

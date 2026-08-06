@@ -119,7 +119,14 @@ type bookingDetailData struct {
 	PaidWarning bool
 
 	SlotOptions []slotOption
-	Errors      map[string]string
+
+	// Location is the customer's map pin, when they dropped one. HasLocation
+	// rather than a nil check in the template, because the partial takes a value
+	// and a zero one would render a map of the equator.
+	Location    locationPreview
+	HasLocation bool
+
+	Errors map[string]string
 	// NotesValue is the submitted note on a rejected save, so a 422 re-render
 	// does not blank what the operator typed.
 	NotesValue string
@@ -625,10 +632,16 @@ func (h *Booking) renderDetail(
 		notesValue = booking.Notes.String
 	}
 
+	location, hasLocation := locationPreviewFor(h.deps,
+		booking.Latitude, booking.Longitude,
+		"Titik yang ditandai pelanggan saat booking. Alamat di atas tetap jadi acuan utama.")
+
 	h.deps.View.Render(w, r, status, "admin/booking-detail", &view.View{
 		Page: view.Page{Title: booking.BookingCode},
 		Data: bookingDetailData{
 			Booking:       booking,
+			Location:      location,
+			HasLocation:   hasLocation,
 			Payments:      rows,
 			Timeline:      timeline,
 			CanConfirm:    booking.Status == sqlc.BookingsStatusPaid,

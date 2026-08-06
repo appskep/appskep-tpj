@@ -1,0 +1,209 @@
+{{/*
+  Admin — tambah / ubah terapis.
+
+  One template for both, driven by .Data.IsNew, for the same reason
+  layanan-form.html is: the fields are identical and the only differences are
+  where the form posts and whether there is a slug and a photo to show.
+
+  Every value comes from .Data.Form, which holds what was submitted rather than
+  what was parsed, so a rejected save re-renders exactly what the admin typed —
+  including the checkboxes they deliberately cleared.
+
+  The file name is terapis-form.html, not terapis/form.html: the renderer globs
+  pages/admin/*.html without recursing, so a subdirectory would be invisible.
+*/}}
+{{- define "content" -}}
+
+<form method="post" action="{{.Data.Action}}" enctype="multipart/form-data" class="max-w-3xl">
+  {{csrfField .CSRF}}
+
+  <div class="rounded-card border border-line bg-paper p-6">
+    <h2 class="font-display text-lg font-bold">Profil terapis</h2>
+
+    <div class="mt-5 grid gap-5">
+
+      {{/* Nama */}}
+      <div>
+        <label for="name" class="block text-sm font-semibold">Nama terapis</label>
+        <input type="text" id="name" name="name" value="{{.Data.Form.Name}}" required maxlength="150"
+               class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                      {{if index .Data.Errors "name"}}border-danger{{else}}border-line{{end}}">
+        {{with index .Data.Errors "name"}}
+          <p class="mt-1 text-sm text-danger">{{.}}</p>
+        {{end}}
+        {{if .Data.IsNew}}
+          <p class="mt-1 text-xs text-ink-faint">
+            Alamat halaman dibuat otomatis dari nama ini dan tidak berubah lagi setelah disimpan.
+          </p>
+        {{end}}
+      </div>
+
+      {{/* Slug — read-only. It is the public URL of the profile, so it is
+           generated once at creation and never follows a rename: changing it
+           would break every existing link with nothing redirecting them. */}}
+      {{if not .Data.IsNew}}
+        <div>
+          <span class="block text-sm font-semibold">Alamat halaman</span>
+          <p class="mt-1.5 flex items-center gap-2 rounded-field bg-paper-2 px-3 py-2.5 text-sm text-ink-soft">
+            <span class="truncate">/terapis/{{.Data.Therapist.Slug}}</span>
+            <span class="ml-auto shrink-0 rounded-pill bg-paper px-2 py-0.5 text-xs font-semibold text-ink-faint">permanen</span>
+          </p>
+        </div>
+      {{end}}
+
+      <div class="grid gap-5 sm:grid-cols-2">
+        {{/* Spesialisasi */}}
+        <div>
+          <label for="specialization" class="block text-sm font-semibold">Spesialisasi</label>
+          <input type="text" id="specialization" name="specialization" value="{{.Data.Form.Specialization}}" maxlength="150"
+                 class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                        {{if index .Data.Errors "specialization"}}border-danger{{else}}border-line{{end}}">
+          {{with index .Data.Errors "specialization"}}
+            <p class="mt-1 text-sm text-danger">{{.}}</p>
+          {{else}}
+            <p class="mt-1 text-xs text-ink-faint">Contoh: Bekam &amp; terapi punggung. Tampil di bawah nama.</p>
+          {{end}}
+        </div>
+
+        {{/* Pengalaman — optional, and blank is not nol: "belum diisi" and "baru
+             mulai" are different things to show on a profile. */}}
+        <div>
+          <label for="years_experience" class="block text-sm font-semibold">Pengalaman (tahun)</label>
+          <input type="number" id="years_experience" name="years_experience" value="{{.Data.Form.YearsExperience}}"
+                 min="0" max="70" step="1"
+                 class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                        {{if index .Data.Errors "years_experience"}}border-danger{{else}}border-line{{end}}">
+          {{with index .Data.Errors "years_experience"}}
+            <p class="mt-1 text-sm text-danger">{{.}}</p>
+          {{else}}
+            <p class="mt-1 text-xs text-ink-faint">Kosongkan kalau belum ingin ditampilkan.</p>
+          {{end}}
+        </div>
+      </div>
+
+      {{/* Bio */}}
+      <div>
+        <label for="bio" class="block text-sm font-semibold">Bio</label>
+        <textarea id="bio" name="bio" rows="5"
+                  class="mt-1.5 w-full rounded-field border border-line bg-paper px-3 py-2.5 text-sm">{{.Data.Form.Bio}}</textarea>
+        <p class="mt-1 text-xs text-ink-faint">
+          Muncul di kartu terapis dan halaman profil. Pisahkan paragraf dengan satu baris kosong.
+        </p>
+      </div>
+
+      {{/* Sertifikasi */}}
+      <div>
+        <label for="certifications" class="block text-sm font-semibold">Sertifikasi &amp; pelatihan</label>
+        <textarea id="certifications" name="certifications" rows="4"
+                  class="mt-1.5 w-full rounded-field border border-line bg-paper px-3 py-2.5 text-sm">{{.Data.Form.Certifications}}</textarea>
+        <p class="mt-1 text-xs text-ink-faint">
+          Satu per paragraf, dipisah baris kosong. Kosongkan kalau belum ada.
+        </p>
+      </div>
+
+      {{/* Urutan — a number rather than drag-and-drop, same reasoning as
+           layanan: the list is short, and a draggable order needs JavaScript
+           state Turbo Drive would discard on the next navigation anyway. */}}
+      <div class="sm:max-w-[12rem]">
+        <label for="sort_order" class="block text-sm font-semibold">Urutan tampil</label>
+        <input type="number" id="sort_order" name="sort_order" value="{{.Data.Form.SortOrder}}" min="0" step="1"
+               class="mt-1.5 w-full rounded-field border bg-paper px-3 py-2.5 text-sm
+                      {{if index .Data.Errors "sort_order"}}border-danger{{else}}border-line{{end}}">
+        {{with index .Data.Errors "sort_order"}}
+          <p class="mt-1 text-sm text-danger">{{.}}</p>
+        {{else}}
+          <p class="mt-1 text-xs text-ink-faint">Angka kecil tampil lebih dulu.</p>
+        {{end}}
+      </div>
+    </div>
+  </div>
+
+  {{/* Layanan yang dikuasai. Only active layanan are offered, so a therapist
+       tagged to one that has since been deactivated loses that tag on save —
+       which the note below says out loud rather than leaving as a surprise. */}}
+  <div class="mt-5 rounded-card border border-line bg-paper p-6">
+    <h2 class="font-display text-lg font-bold">Layanan yang dikuasai</h2>
+
+    {{if .Data.ServiceChoices}}
+      <div class="mt-4 grid gap-2 sm:grid-cols-2">
+        {{range .Data.ServiceChoices}}
+          <label class="flex items-start gap-3 rounded-field border border-line p-3 text-sm transition hover:bg-paper-2">
+            <input type="checkbox" name="service_ids" value="{{.ID}}" {{if .Checked}}checked{{end}}
+                   class="mt-0.5 h-4 w-4 rounded border-line text-clay-600">
+            <span class="min-w-0">
+              <span class="block font-semibold">{{.Name}}</span>
+              <span class="block text-xs text-ink-faint">{{duration .DurationMinutes}} · {{rupiah .Price}}</span>
+            </span>
+          </label>
+        {{end}}
+      </div>
+      <p class="mt-3 text-xs text-ink-faint">
+        Tampil sebagai tautan di halaman profil, dan terapis ini ikut muncul di halaman
+        layanan yang dicentang. Hanya layanan aktif yang bisa dipilih.
+      </p>
+    {{else}}
+      <p class="mt-3 text-sm text-ink-soft">Belum ada layanan aktif yang bisa dipilih.</p>
+    {{end}}
+  </div>
+
+  {{/* Foto */}}
+  <div class="mt-5 rounded-card border border-line bg-paper p-6">
+    <h2 class="font-display text-lg font-bold">Foto</h2>
+
+    <div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start">
+      <span class="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-full bg-paper-2 text-ink-faint">
+        {{if .Data.Therapist.ImagePath.Valid}}
+          <img src="/static/{{nullstr .Data.Therapist.ImagePath}}" alt="Foto {{.Data.Therapist.Name}}"
+               width="112" height="112" class="h-full w-full object-cover">
+        {{else}}
+          {{icon "user" "h-6 w-6"}}
+        {{end}}
+      </span>
+
+      <div class="min-w-0 flex-1">
+        <label for="image" class="block text-sm font-semibold">Unggah foto</label>
+        <input type="file" id="image" name="image" accept="image/jpeg,image/png,image/webp"
+               class="mt-1.5 w-full rounded-field border border-line bg-paper px-3 py-2.5 text-sm
+                      file:mr-3 file:rounded-field file:border-0 file:bg-paper-2 file:px-3 file:py-1.5
+                      file:text-sm file:font-semibold file:text-ink">
+        {{with index .Data.Errors "image"}}
+          <p class="mt-1 text-sm text-danger">{{.}}</p>
+        {{else}}
+          <p class="mt-1 text-xs text-ink-faint">JPG, PNG, atau WEBP. Maksimal 2 MB. Foto persegi tampil paling rapi.</p>
+        {{end}}
+
+        {{if .Data.Therapist.ImagePath.Valid}}
+          <label class="mt-3 flex items-center gap-2 text-sm">
+            <input type="checkbox" name="remove_image" value="1"
+                   class="h-4 w-4 rounded border-line text-clay-600">
+            Hapus foto saat ini
+          </label>
+        {{end}}
+      </div>
+    </div>
+  </div>
+
+  {{/* Status */}}
+  <div class="mt-5 rounded-card border border-line bg-paper p-6">
+    <h2 class="font-display text-lg font-bold">Status</h2>
+
+    <label class="mt-4 flex items-start gap-3 text-sm">
+      <input type="checkbox" name="is_active" value="1" {{if .Data.Form.IsActive}}checked{{end}}
+             class="mt-0.5 h-4 w-4 rounded border-line text-clay-600">
+      <span>
+        <span class="font-semibold">Aktif</span>
+        <span class="block text-xs text-ink-soft">Tampil di situs publik. Nonaktif berarti disembunyikan sepenuhnya.</span>
+      </span>
+    </label>
+  </div>
+
+  <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+    <a href="/admin/terapis" class="{{template "btn_ghost"}}">Batal</a>
+    <button type="submit" class="{{template "btn_primary"}}">
+      {{icon "check" "h-4 w-4"}}
+      {{if .Data.IsNew}}Tambah terapis{{else}}Simpan perubahan{{end}}
+    </button>
+  </div>
+</form>
+
+{{- end -}}

@@ -53,7 +53,7 @@ func race(t *testing.T, env *testsupport.Env, slotID int64, users []int64) []rac
 				SlotID:      fmt.Sprint(slotID),
 				Name:        fmt.Sprintf("Pembalap %d", i),
 				Phone:       "081234567890",
-				Address:     fmt.Sprintf("Jl. Balap No. %d, Sleman", i),
+				Address:     fmt.Sprintf("Jl. Balap No. %d, Padang", i),
 			})
 			results[i] = raceResult{ok: err == nil, err: err}
 		})
@@ -256,7 +256,7 @@ func TestSequentialBookingIsNotEvidence(t *testing.T) {
 		SlotID:      fmt.Sprint(slot.ID),
 		Name:        "Yang kedua",
 		Phone:       "081234567890",
-		Address:     "Jl. Kedua No. 2, Sleman",
+		Address:     "Jl. Kedua No. 2, Padang",
 	})
 
 	// A ValidationError, not ErrSlotTaken: this never got as far as the lock.

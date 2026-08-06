@@ -84,6 +84,62 @@ CREATE TABLE IF NOT EXISTS services (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------------
+-- therapists — the people, as public profile content. Managed from
+-- /admin/terapis.
+--
+-- Deliberately NOT linked to bookings or schedule_slots. Parallel therapists are
+-- modelled as schedule_slots.capacity (see that table); this is the marketing
+-- side of the same fact, and nothing in the booking transaction reads it.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS therapists (
+  id               BIGINT       NOT NULL AUTO_INCREMENT,
+  slug             VARCHAR(150) NOT NULL,
+  name             VARCHAR(150) NOT NULL,
+  -- One line under the name, e.g. "Bekam & terapi punggung".
+  specialization   VARCHAR(150) NULL,
+  bio              TEXT         NULL,
+  certifications   TEXT         NULL,
+  -- NULL means "not stated", which is a different thing from 0 years.
+  years_experience INT          NULL,
+  image_path       VARCHAR(255) NULL,
+  is_active        TINYINT(1)   NOT NULL DEFAULT 1,
+  sort_order       INT          NOT NULL DEFAULT 0,
+  created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_therapists_slug (slug),
+  KEY idx_therapists_active_sort (is_active, sort_order, id),
+  -- Mirrors validateTherapist, so a bug there cannot write garbage.
+  CONSTRAINT chk_therapists_experience
+    CHECK (years_experience IS NULL OR years_experience BETWEEN 0 AND 70)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- therapist_services — which layanan a therapist handles. Display metadata.
+--
+-- Both foreign keys CASCADE, which is the one place this schema departs from its
+-- RESTRICT/RESTRICT rule, and deliberately: every other FK here points at a row
+-- someone's money depends on, whereas a join row is an *attribute* of the two
+-- rows it joins and carries no independent fact.
+--
+-- The service_id side is the one that matters. Under RESTRICT, deleting a tagged
+-- layanan would raise a foreign key violation that Catalog.Delete already
+-- translates to ErrHasBookings — telling the admin "layanan sudah punya booking"
+-- about a layanan with no bookings at all. CASCADE keeps that message honest and
+-- leaves catalog.go untouched.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS therapist_services (
+  therapist_id BIGINT NOT NULL,
+  service_id   BIGINT NOT NULL,
+  PRIMARY KEY (therapist_id, service_id),
+  KEY idx_therapist_services_service (service_id),
+  CONSTRAINT fk_ts_therapist FOREIGN KEY (therapist_id) REFERENCES therapists (id)
+    ON DELETE CASCADE ON UPDATE RESTRICT,
+  CONSTRAINT fk_ts_service FOREIGN KEY (service_id) REFERENCES services (id)
+    ON DELETE CASCADE ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
 -- schedule_slots — bookable time slots.
 --
 -- Slots are global (PLAN.md Q4): service_id is NULL today and exists so

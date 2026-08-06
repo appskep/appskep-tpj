@@ -189,6 +189,11 @@
   // seven decimal places the DECIMAL(9,7)/DECIMAL(10,7) columns hold. The server
   // normalises to the same precision, so what is submitted is what is stored.
   function write(entry, latlng) {
+    // A read-only preview has no inputs to mirror into. Guarding here rather
+    // than at every call site keeps place() identical for both modes.
+    if (!entry.latInput || !entry.lngInput) {
+      return;
+    }
     entry.latInput.value = latlng.lat.toFixed(7);
     entry.lngInput.value = latlng.lng.toFixed(7);
     if (entry.clear) {
@@ -202,15 +207,20 @@
       entry.marker.setLatLng(latlng);
     } else {
       entry.marker = window.L.marker(latlng, {
-        draggable: true,
+        // A preview shows where the customer put the pin; it is not a second
+        // place to move it from. An operator who drags a pin that then silently
+        // does not save has been lied to.
+        draggable: !entry.readOnly,
         icon: entry.icon,
         keyboard: true,
         alt: "Titik lokasi terapi"
       }).addTo(entry.map);
-      entry.marker.on("dragend", function () {
-        write(entry, entry.marker.getLatLng());
-        setStatus(entry, "Pin dipindahkan. Titik ini yang dikirim ke terapis.");
-      });
+      if (!entry.readOnly) {
+        entry.marker.on("dragend", function () {
+          write(entry, entry.marker.getLatLng());
+          setStatus(entry, "Pin dipindahkan. Titik ini yang dikirim ke terapis.");
+        });
+      }
     }
     entry.map.setView(latlng, zoom || entry.map.getZoom());
     write(entry, latlng);
@@ -282,10 +292,19 @@
   }
 
   function build(el) {
+    var canvas = el.querySelector("[data-map-canvas]");
+    if (!canvas) {
+      return;
+    }
+
+    // Two modes over one widget. The picker writes a pin into hidden inputs; the
+    // read-only preview (the admin booking detail) renders a pin already stored,
+    // and has no inputs, no detect button and no clear button at all.
+    var readOnly = el.hasAttribute("data-map-readonly");
+
     var latInput = el.querySelector("[data-map-lat-input]");
     var lngInput = el.querySelector("[data-map-lng-input]");
-    var canvas = el.querySelector("[data-map-canvas]");
-    if (!latInput || !lngInput || !canvas) {
+    if (!readOnly && (!latInput || !lngInput)) {
       return;
     }
 
@@ -294,6 +313,7 @@
       el: el,
       map: null,
       marker: null,
+      readOnly: readOnly,
       latInput: latInput,
       lngInput: lngInput,
       status: el.querySelector("[data-map-status]"),
@@ -327,17 +347,34 @@
       maxZoom: 19
     }).addTo(entry.map);
 
-    // Clicking the map is the other half of "choose a location": dragging only
-    // works once a pin exists, and a first-time user has none.
-    entry.map.on("click", function (event) {
-      place(entry, event.latlng.lat, event.latlng.lng);
-      setStatus(entry, "Titik dipilih. Geser pin kalau belum tepat.");
-    });
+    if (!readOnly) {
+      // Clicking the map is the other half of "choose a location": dragging only
+      // works once a pin exists, and a first-time user has none.
+      entry.map.on("click", function (event) {
+        place(entry, event.latlng.lat, event.latlng.lng);
+        setStatus(entry, "Titik dipilih. Geser pin kalau belum tepat.");
+      });
+    }
 
-    var hasPin = latInput.value !== "" && lngInput.value !== "";
+    // The preview reads its coordinates from data attributes, since it has no
+    // inputs to read them out of.
+    var pinLat = readOnly ? el.dataset.mapLat : latInput.value;
+    var pinLng = readOnly ? el.dataset.mapLng : lngInput.value;
+
+    var hasPin = !!pinLat && !!pinLng;
     if (hasPin) {
-      place(entry, parseFloat(latInput.value), parseFloat(lngInput.value), 16);
-      setStatus(entry, "Titik lokasi tersimpan. Geser pin kalau perlu.");
+      place(entry, parseFloat(pinLat), parseFloat(pinLng), 16);
+      if (!readOnly) {
+        setStatus(entry, "Titik lokasi tersimpan. Geser pin kalau perlu.");
+      }
+    } else if (readOnly) {
+      // Nothing to show. The server does not render the preview at all in this
+      // case, so reaching here means the markup and the data disagree — open on
+      // the service area rather than at 0°,0° and drop no marker.
+      entry.map.setView(
+        [parseFloat(el.dataset.mapDefaultLat), parseFloat(el.dataset.mapDefaultLng)],
+        zoom
+      );
     } else {
       // No pin: open on the configured service area rather than at 0°,0°, and
       // drop no marker — an unset location must not look like a set one.
@@ -355,6 +392,14 @@
     requestAnimationFrame(function () {
       entry.map.invalidateSize();
     });
+
+    // Everything below is the picker's: geolocation, the clear button and the
+    // auto-detect. A preview has none of them.
+    if (readOnly) {
+      maps.push(entry);
+      el.dataset.mapReady = "1";
+      return;
+    }
 
     var detect = el.querySelector("[data-map-detect]");
     if (detect) {

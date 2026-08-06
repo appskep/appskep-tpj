@@ -53,6 +53,56 @@ ON DUPLICATE KEY UPDATE
   sort_order       = VALUES(sort_order);
 
 -- ---------------------------------------------------------------------------
+-- Terapis. Placeholder profiles so /terapis and /admin/terapis have something to
+-- render; the real names, photos and bios come from /admin/terapis.
+--
+-- Re-seeding refreshes the copy but never touches is_active or image_path —
+-- those belong to the admin panel, same rule as the layanan block above.
+-- ---------------------------------------------------------------------------
+INSERT INTO therapists (slug, name, specialization, bio, certifications, years_experience, is_active, sort_order)
+VALUES
+  ('budi-santoso', 'Budi Santoso', 'Urut & terapi otot',
+   'Menangani keluhan pegal, nyeri punggung, dan cedera ringan. Terbiasa menyesuaikan tekanan dengan kondisi badan, jadi bilang saja kalau terlalu kuat atau terlalu pelan.',
+   'Pelatihan Urut Therapeutic — 2019', 6, 1, 1),
+  ('siti-rahmawati', 'Siti Rahmawati', 'Massage relaksasi',
+   'Fokus pada relaksasi dan kualitas tidur. Membawa kasur terapi dan aromaterapi sendiri, jadi tidak perlu menyiapkan apa pun di rumah.',
+   'Sertifikat Massage Therapeutic — 2021', 4, 1, 2),
+  ('ahmad-fauzi', 'Ahmad Fauzi', 'Bekam basah & kering',
+   'Melayani bekam basah dan kering dengan peralatan sekali pakai. Menjelaskan titik bekam sebelum mulai supaya tidak ada yang mengagetkan.',
+   'Sertifikat Bekam Basah — 2020\n\nPelatihan Sterilisasi Alat — 2022', 8, 1, 3)
+ON DUPLICATE KEY UPDATE
+  name             = VALUES(name),
+  specialization   = VALUES(specialization),
+  bio              = VALUES(bio),
+  certifications   = VALUES(certifications),
+  years_experience = VALUES(years_experience),
+  sort_order       = VALUES(sort_order);
+
+-- Which layanan each terapis handles. Ids are resolved by slug rather than
+-- hardcoded, so the block stays correct whatever order the two INSERTs above ran
+-- in and however many times this file is re-applied.
+INSERT INTO therapist_services (therapist_id, service_id)
+SELECT t.id, s.id
+FROM therapists t
+JOIN services s ON s.slug IN ('urut-therapeutic', 'massage-therapeutic')
+WHERE t.slug = 'budi-santoso'
+ON DUPLICATE KEY UPDATE therapist_id = therapist_services.therapist_id;
+
+INSERT INTO therapist_services (therapist_id, service_id)
+SELECT t.id, s.id
+FROM therapists t
+JOIN services s ON s.slug = 'massage-therapeutic'
+WHERE t.slug = 'siti-rahmawati'
+ON DUPLICATE KEY UPDATE therapist_id = therapist_services.therapist_id;
+
+INSERT INTO therapist_services (therapist_id, service_id)
+SELECT t.id, s.id
+FROM therapists t
+JOIN services s ON s.slug IN ('bekam-therapeutic', 'urut-therapeutic')
+WHERE t.slug = 'ahmad-fauzi'
+ON DUPLICATE KEY UPDATE therapist_id = therapist_services.therapist_id;
+
+-- ---------------------------------------------------------------------------
 -- Schedule slots: CURDATE()-2 .. CURDATE()+14, four 150-minute slots per day
 -- (08:00-10:30, 10:30-13:00, 13:00-15:30, 15:30-18:00). A fifth would end at
 -- 20:30, outside the 08:00-20:00 operating window. 17 days x 4 = 68 rows.
@@ -105,7 +155,7 @@ INSERT INTO settings (setting_key, setting_value) VALUES
   ('contact_phone',                 '0812-3456-7890'),
   ('whatsapp_number',               '6281234567890'),
   -- The area served, not a venue: the therapist travels to the customer.
-  ('contact_address',               'Yogyakarta dan sekitarnya'),
+  ('contact_address',               'Padang dan sekitarnya'),
   ('instagram_url',                 'https://instagram.com/terapipemudajompo'),
   ('booking_lead_time_minutes',     '120'),
   ('booking_max_days_ahead',        '30'),

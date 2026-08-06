@@ -32,6 +32,10 @@ type Deps struct {
 	// Catalog is the business logic behind the layanan module: validation, slug
 	// allocation and image storage.
 	Catalog *service.Catalog
+	// Therapists is the terapis module — profile content for /terapis and
+	// /admin/terapis. Display-only: nothing in the booking path reads it, because
+	// parallel therapists are modelled as schedule_slots.capacity.
+	Therapists *service.Therapists
 	// Schedule is the business logic behind the jadwal module: slot validation,
 	// the range and calendar reads, and the generator.
 	Schedule *service.Schedule
