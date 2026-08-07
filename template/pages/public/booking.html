@@ -75,7 +75,11 @@
             {{if .Description.Valid}}
               <p class="mt-2 text-sm leading-relaxed text-ink-soft">{{truncate (nullstr .Description) 110}}</p>
             {{end}}
-            <div class="mt-5 flex flex-wrap items-center justify-between gap-2">
+            {{/* mt-auto pins the price row to the foot of the card, so a row of
+                 cards with descriptions of different lengths (or none at all)
+                 still lines its prices up. pt-5 keeps the gap in the shortest
+                 card, where there is no slack left for mt-auto to absorb. */}}
+            <div class="mt-auto flex flex-wrap items-center justify-between gap-2 pt-5">
               <span class="font-display text-xl font-bold text-clay-600">{{rupiah .Price}}</span>
               {{template "pill" (duration .DurationMinutes)}}
             </div>
