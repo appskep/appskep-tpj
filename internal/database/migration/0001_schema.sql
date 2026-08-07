@@ -35,6 +35,12 @@ CREATE TABLE IF NOT EXISTS users (
   email           VARCHAR(255)         NOT NULL,
   name            VARCHAR(150)         NOT NULL,
   phone           VARCHAR(30)          NULL,
+  -- Appskep-owned account fields mirrored locally so the profile form can
+  -- prefill them. name/email/phone are also refreshed from the JWT on login;
+  -- birthdate and sex are not in the JWT, so the mirror is their only local
+  -- copy and persists between logins. sex is Appskep's convention: 1, 2 or NULL.
+  birthdate       DATE                 NULL,
+  sex             TINYINT              NULL,
   address         VARCHAR(500)         NULL,
   -- The customer's default map pin, WGS84 degrees. Both NULL or both set — the
   -- pair is written together by service.Profile and never separately, so a half

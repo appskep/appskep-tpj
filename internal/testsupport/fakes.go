@@ -5,9 +5,82 @@ import (
 	"sync"
 	"time"
 
+	"github.com/remorac/appskep-tpj/internal/shared/auth"
 	"github.com/remorac/appskep-tpj/internal/shared/mail"
 	"github.com/remorac/appskep-tpj/internal/shared/payment"
 )
+
+// FakeAccount stands in for the Appskep account API (auth.Account).
+//
+// It records every call so a test can assert the exact fields pushed, and its
+// programmable errors let a test drive the rejection branch (return an
+// *auth.ErrAccountRejected) or a transport failure (any other error) without a
+// network. Mutex-guarded to stay honest under -race, like FakeGateway.
+type FakeAccount struct {
+	mu sync.Mutex
+
+	// Profiles records every UpdateProfile argument; Tokens the bearer token each
+	// call carried, so a test can assert the signed-in user's own token was used.
+	Profiles []auth.AccountProfile
+	Tokens   []string
+	// Passwords records every SetPassword new-password argument.
+	Passwords []string
+
+	// The programmable failures, returned as-is.
+	UpdateErr   error
+	PasswordErr error
+}
+
+func NewFakeAccount() *FakeAccount { return &FakeAccount{} }
+
+func (a *FakeAccount) UpdateProfile(_ context.Context, token string, in auth.AccountProfile) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.Tokens = append(a.Tokens, token)
+	if a.UpdateErr != nil {
+		return a.UpdateErr
+	}
+	a.Profiles = append(a.Profiles, in)
+	return nil
+}
+
+func (a *FakeAccount) SetPassword(_ context.Context, token, newPassword, _ string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.Tokens = append(a.Tokens, token)
+	if a.PasswordErr != nil {
+		return a.PasswordErr
+	}
+	a.Passwords = append(a.Passwords, newPassword)
+	return nil
+}
+
+// LastProfile returns the most recent accepted UpdateProfile argument.
+func (a *FakeAccount) LastProfile() (auth.AccountProfile, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.Profiles) == 0 {
+		return auth.AccountProfile{}, false
+	}
+	return a.Profiles[len(a.Profiles)-1], true
+}
+
+// ProfileCount is how many UpdateProfile calls were accepted (UpdateErr nil).
+func (a *FakeAccount) ProfileCount() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.Profiles)
+}
+
+// PasswordCount is how many SetPassword calls were accepted.
+func (a *FakeAccount) PasswordCount() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.Passwords)
+}
+
+// compile-time assertion that FakeAccount satisfies the interface.
+var _ auth.Account = (*FakeAccount)(nil)
 
 // FakeGateway stands in for Midtrans.
 //

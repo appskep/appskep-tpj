@@ -1,57 +1,98 @@
 {{/*
-  /profil — the three fields this system owns, and links out for the rest.
+  /profil — the customer's own account page.
 
-  Name, email and password belong to Appskep (PLAN.md R1, R2). They are shown as
-  read-only text with an explanation and a link, NOT as disabled inputs: a
-  disabled input still looks like a field somebody can fix, and a user would keep
-  clicking it. Saying where the value lives is the only honest treatment.
+  The account fields (nama, email, telepon, tanggal lahir, jenis kelamin) belong
+  to Appskep and are edited here by forwarding to the Appskep account API with
+  the signed-in user's own token; they are also mirrored locally so this form and
+  the booking form prefill from the same row. Address, the map pin and the avatar
+  are local. TPJ still owns no credentials — see service.Profile.
 
-  One form, multipart because of the avatar. It answers success with a redirect,
-  so it must NOT carry data-turbo="false" — that attribute is for a POST replying
-  200, which Turbo silently discards. A rejected submit re-renders at 422 with
-  every typed value intact, which Turbo renders normally.
+  Two forms. The main one is multipart because of the avatar and saves the
+  account fields plus the local fields at once. The password form is separate so
+  a routine save never carries a password and a password change never re-posts
+  every field. Both answer success with a redirect, so NEITHER may carry
+  data-turbo="false" — that attribute is for a POST replying 200, which Turbo
+  silently discards. A rejected submit re-renders at 422 with the typed values
+  intact (the password itself is never echoed), which Turbo renders normally.
 */}}
 {{- define "content" -}}
 {{$u := .Data.User}}
+{{$form := .Data.Form}}
+{{$errors := .Data.Errors}}
+
+{{/* One input style, reused so every field matches. */}}
+{{$input := "mt-1.5 w-full rounded-field border border-line bg-paper px-3.5 py-2.5 text-sm outline-none transition focus:border-clay-600 focus:ring-2 focus:ring-clay-600/20"}}
 
 <div class="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:py-12">
 
   <h1 class="font-display text-3xl font-extrabold tracking-tight">Profil</h1>
   <p class="mt-2 text-ink-soft">
-    Data kontak di sini dipakai untuk mengisi formulir booking secara otomatis.
+    Data di sini dipakai untuk mengisi formulir booking secara otomatis.
   </p>
 
-  {{/* -------------------------------------------------------- AKUN APPSKEP */}}
-  <section class="mt-8 rounded-card border border-line bg-paper-2 p-6">
-    <h2 class="font-display text-lg font-bold">Akun Appskep</h2>
-    <p class="mt-1 text-sm text-ink-soft">
-      Nama, email, dan kata sandi dikelola oleh akun Appskep kamu, bukan di situs ini.
-    </p>
-
-    <dl class="mt-5 divide-y divide-line text-sm">
-      <div class="flex justify-between gap-4 pb-3">
-        <dt class="text-ink-soft">Nama</dt>
-        <dd class="text-right font-semibold">{{$u.Name}}</dd>
-      </div>
-      <div class="flex justify-between gap-4 pt-3">
-        <dt class="text-ink-soft">Email</dt>
-        <dd class="min-w-0 break-all text-right font-semibold">{{$u.Email}}</dd>
-      </div>
-    </dl>
-
-    {{/* The host comes from AUTH_URL through the authURL helper, never from a
-         literal in this file — the same rule the login link follows. */}}
-    <a href="{{authURL}}" rel="noopener noreferrer" target="_blank"
-       class="{{template "btn_secondary"}} mt-5">
-      {{icon "external-link" "h-4 w-4"}} Kelola akun di Appskep
-    </a>
-  </section>
-
-  {{/* ------------------------------------------------------------- FORMULIR */}}
-  <form method="post" action="/profil" enctype="multipart/form-data" class="mt-6">
+  {{/* ---------------------------------------------------------- FORM UTAMA */}}
+  <form method="post" action="/profil" enctype="multipart/form-data" class="mt-8">
     {{csrfField .CSRF}}
 
+    {{/* ------------------------------------------------------ AKUN APPSKEP */}}
     <section class="rounded-card border border-line bg-paper p-6">
+      <h2 class="font-display text-lg font-bold">Akun Appskep</h2>
+      <p class="mt-1 text-sm text-ink-soft">
+        Data ini tersimpan di akun Appskep kamu dan dipakai di seluruh layanan Appskep.
+      </p>
+
+      {{/* A rejection from Appskep does not name a field, so it renders as a
+           notice here rather than beside one input. */}}
+      {{with index $errors "akun"}}
+        <p class="mt-4 rounded-field border border-danger/30 bg-danger/5 px-3.5 py-2.5 text-sm font-medium text-danger">{{.}}</p>
+      {{end}}
+
+      <div class="mt-5">
+        <label for="nama" class="block text-sm font-semibold">Nama</label>
+        <input type="text" id="nama" name="nama" value="{{$form.Nama}}"
+               autocomplete="name" maxlength="150" class="{{$input}}">
+        {{with index $errors "nama"}}
+          <p class="mt-1.5 text-sm font-medium text-danger">{{.}}</p>
+        {{end}}
+      </div>
+
+      <div class="mt-5">
+        <label for="email" class="block text-sm font-semibold">Email</label>
+        <input type="email" id="email" name="email" value="{{$form.Email}}"
+               autocomplete="email" maxlength="255" class="{{$input}}">
+        {{with index $errors "email"}}
+          <p class="mt-1.5 text-sm font-medium text-danger">{{.}}</p>
+        {{else}}
+          <p class="mt-1.5 text-xs text-ink-faint">Dipakai juga untuk masuk ke Appskep.</p>
+        {{end}}
+      </div>
+
+      <div class="mt-5 grid gap-5 sm:grid-cols-2">
+        <div>
+          <label for="tanggal_lahir" class="block text-sm font-semibold">Tanggal lahir</label>
+          <input type="date" id="tanggal_lahir" name="tanggal_lahir" value="{{$form.TanggalLahir}}"
+                 class="{{$input}}">
+          {{with index $errors "tanggal_lahir"}}
+            <p class="mt-1.5 text-sm font-medium text-danger">{{.}}</p>
+          {{end}}
+        </div>
+
+        <div>
+          <label for="jenis_kelamin" class="block text-sm font-semibold">Jenis kelamin</label>
+          <select id="jenis_kelamin" name="jenis_kelamin" class="{{$input}}">
+            <option value="" {{if eq $form.JenisKelamin ""}}selected{{end}}>Belum diisi</option>
+            <option value="1" {{if eq $form.JenisKelamin "1"}}selected{{end}}>Laki-laki</option>
+            <option value="2" {{if eq $form.JenisKelamin "2"}}selected{{end}}>Perempuan</option>
+          </select>
+          {{with index $errors "jenis_kelamin"}}
+            <p class="mt-1.5 text-sm font-medium text-danger">{{.}}</p>
+          {{end}}
+        </div>
+      </div>
+    </section>
+
+    {{/* ---------------------------------------------------------- FOTO PROFIL */}}
+    <section class="mt-6 rounded-card border border-line bg-paper p-6">
       <h2 class="font-display text-lg font-bold">Foto profil</h2>
 
       <div class="mt-5 flex flex-wrap items-center gap-5">
@@ -70,7 +111,7 @@
           <label for="avatar" class="block text-sm font-semibold">Ganti foto</label>
           <input type="file" id="avatar" name="avatar" accept="image/jpeg,image/png,image/webp"
                  class="mt-1.5 block w-full text-sm text-ink-soft file:mr-3 file:rounded-field file:border-0 file:bg-paper-2 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-ink hover:file:bg-line">
-          {{with index .Data.Errors "avatar"}}
+          {{with index $errors "avatar"}}
             <p class="mt-1.5 text-sm font-medium text-danger">{{.}}</p>
           {{else}}
             <p class="mt-1.5 text-xs text-ink-faint">JPG, PNG, atau WEBP. Maksimal 1 MB.</p>
@@ -87,15 +128,15 @@
       </div>
     </section>
 
+    {{/* --------------------------------------------------------------- KONTAK */}}
     <section class="mt-6 rounded-card border border-line bg-paper p-6">
-      <h2 class="font-display text-lg font-bold">Kontak</h2>
+      <h2 class="font-display text-lg font-bold">Kontak & lokasi</h2>
 
       <div class="mt-5">
         <label for="telepon" class="block text-sm font-semibold">Nomor telepon / WhatsApp</label>
-        <input type="tel" id="telepon" name="telepon" value="{{.Data.Form.Telepon}}"
-               inputmode="tel" autocomplete="tel" maxlength="30"
-               class="mt-1.5 w-full rounded-field border border-line bg-paper px-3.5 py-2.5 text-sm outline-none transition focus:border-clay-600 focus:ring-2 focus:ring-clay-600/20">
-        {{with index .Data.Errors "telepon"}}
+        <input type="tel" id="telepon" name="telepon" value="{{$form.Telepon}}"
+               inputmode="tel" autocomplete="tel" maxlength="30" class="{{$input}}">
+        {{with index $errors "telepon"}}
           <p class="mt-1.5 text-sm font-medium text-danger">{{.}}</p>
         {{else}}
           <p class="mt-1.5 text-xs text-ink-faint">Dipakai untuk mengonfirmasi jadwal terapimu.</p>
@@ -105,8 +146,8 @@
       <div class="mt-5">
         <label for="alamat" class="block text-sm font-semibold">Alamat</label>
         <textarea id="alamat" name="alamat" rows="3" maxlength="500" autocomplete="street-address"
-                  class="mt-1.5 w-full rounded-field border border-line bg-paper px-3.5 py-2.5 text-sm outline-none transition focus:border-clay-600 focus:ring-2 focus:ring-clay-600/20">{{.Data.Form.Alamat}}</textarea>
-        {{with index .Data.Errors "alamat"}}
+                  class="{{$input}}">{{$form.Alamat}}</textarea>
+        {{with index $errors "alamat"}}
           <p class="mt-1.5 text-sm font-medium text-danger">{{.}}</p>
         {{else}}
           <p class="mt-1.5 text-xs text-ink-faint">Dipakai sebagai alamat kunjungan terapis. Bisa kamu ganti saat booking.</p>
@@ -127,6 +168,44 @@
         {{icon "check" "h-4 w-4"}} Simpan perubahan
       </button>
     </div>
+  </form>
+
+  {{/* --------------------------------------------------------- KATA SANDI */}}
+  <form method="post" action="/profil/kata-sandi" class="mt-6">
+    {{csrfField .CSRF}}
+
+    <section class="rounded-card border border-line bg-paper-2 p-6">
+      <h2 class="font-display text-lg font-bold">Ubah kata sandi</h2>
+      <p class="mt-1 text-sm text-ink-soft">
+        Mengubah kata sandi Appskep kamu. Berlaku untuk semua layanan Appskep.
+      </p>
+
+      <div class="mt-5">
+        <label for="kata_sandi_baru" class="block text-sm font-semibold">Kata sandi baru</label>
+        <input type="password" id="kata_sandi_baru" name="kata_sandi_baru"
+               autocomplete="new-password" minlength="8" class="{{$input}}">
+        {{with index $errors "kata_sandi_baru"}}
+          <p class="mt-1.5 text-sm font-medium text-danger">{{.}}</p>
+        {{else}}
+          <p class="mt-1.5 text-xs text-ink-faint">Minimal 8 karakter.</p>
+        {{end}}
+      </div>
+
+      <div class="mt-5">
+        <label for="konfirmasi_kata_sandi" class="block text-sm font-semibold">Ulangi kata sandi baru</label>
+        <input type="password" id="konfirmasi_kata_sandi" name="konfirmasi_kata_sandi"
+               autocomplete="new-password" class="{{$input}}">
+        {{with index $errors "konfirmasi_kata_sandi"}}
+          <p class="mt-1.5 text-sm font-medium text-danger">{{.}}</p>
+        {{end}}
+      </div>
+
+      <div class="mt-6 flex sm:justify-end">
+        <button type="submit" class="{{template "btn_secondary"}}">
+          {{icon "lock" "h-4 w-4"}} Perbarui kata sandi
+        </button>
+      </div>
+    </section>
   </form>
 </div>
 {{- end -}}

@@ -14,11 +14,28 @@ const (
 	ctxKeyUser ctxKey = iota
 	ctxKeyFlash
 	ctxKeyCSRF
+	ctxKeyToken
 )
 
 // WithUser attaches the signed-in user. Only the auth middleware calls this.
 func WithUser(ctx context.Context, u *model.User) context.Context {
 	return context.WithValue(ctx, ctxKeyUser, u)
+}
+
+// WithToken attaches the raw Appskep JWT so a handler can present it as the
+// bearer token when editing the user's Appskep account. Only the auth
+// middleware calls this, and only for a signed-in user.
+//
+// The token is never rendered into HTML — it stays server-side, exactly as the
+// session cookie does, and reaches only the auth service it came from.
+func WithToken(ctx context.Context, token string) context.Context {
+	return context.WithValue(ctx, ctxKeyToken, token)
+}
+
+// TokenFrom returns the raw JWT for this request, or "" when anonymous.
+func TokenFrom(ctx context.Context) string {
+	t, _ := ctx.Value(ctxKeyToken).(string)
+	return t
 }
 
 // UserFrom returns the signed-in user, or nil on an anonymous request.

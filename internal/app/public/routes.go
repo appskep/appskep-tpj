@@ -84,6 +84,8 @@ func Routes(d *app.Deps) chi.Router {
 		profil := handler.NewProfil(d)
 		r.Get("/profil", profil.Show)
 		r.Post("/profil", profil.Save)
+		// A separate route so a password change never re-posts the profile fields.
+		r.Post("/profil/kata-sandi", profil.SavePassword)
 	})
 
 	return r

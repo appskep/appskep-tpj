@@ -304,6 +304,75 @@ func TestCoordinatePair(t *testing.T) {
 // dropped while booking must not be refused when saved as the profile default.
 // One helper is what guarantees it; this is what would notice if a second one
 // appeared.
+// The Appskep account validators (Phase 14): email, birthdate, sex. New here
+// because the booking form never carried them, and the profile form pushes them
+// to Appskep — these catch the obvious mistakes before a network round trip.
+
+func TestEmailValidator(t *testing.T) {
+	cases := []struct {
+		value string
+		valid bool
+	}{
+		{"budi@example.com", true},
+		{"a.b-c+tag@sub.example.co.id", true},
+		{"budi@example", true}, // a bare host is a syntactically valid address
+		{"budi at example.com", false},
+		{"budi@", false},
+		{"@example.com", false},
+		{"Budi <budi@example.com>", false}, // a display name is not just an address
+		{"", false},                        // required-ness is the caller's job, but a lone "" is not an address
+	}
+	for _, c := range cases {
+		ve := NewValidationError()
+		if got := email(ve, "email", c.value); got != c.valid {
+			t.Errorf("email(%q) = %v, want %v", c.value, got, c.valid)
+		}
+	}
+}
+
+func TestBirthdateValidator(t *testing.T) {
+	ve := NewValidationError()
+	if got, ok := birthdate(ve, "tanggal_lahir", ""); !ok || got.Valid {
+		t.Errorf("empty birthdate = (%v, ok=%v), want a NULL and ok", got, ok)
+	}
+
+	ve = NewValidationError()
+	got, ok := birthdate(ve, "tanggal_lahir", "1998-04-05")
+	if !ok || !got.Valid {
+		t.Fatalf("valid birthdate rejected: ok=%v valid=%v", ok, got.Valid)
+	}
+	if got.Time.Format("2006-01-02") != "1998-04-05" {
+		t.Errorf("parsed = %s, want 1998-04-05", got.Time.Format("2006-01-02"))
+	}
+
+	for _, bad := range []string{"05-04-1998", "1998/04/05", "1998-13-01", "not-a-date"} {
+		ve = NewValidationError()
+		if _, ok := birthdate(ve, "tanggal_lahir", bad); ok {
+			t.Errorf("birthdate(%q) was accepted", bad)
+		}
+	}
+}
+
+func TestSexValidator(t *testing.T) {
+	ve := NewValidationError()
+	if got, ok := sex(ve, "jenis_kelamin", ""); !ok || got.Valid {
+		t.Errorf("empty sex = (%v, ok=%v), want a NULL and ok", got, ok)
+	}
+	for _, v := range []string{"1", "2"} {
+		ve = NewValidationError()
+		got, ok := sex(ve, "jenis_kelamin", v)
+		if !ok || !got.Valid || got.Int16 != int16(v[0]-'0') {
+			t.Errorf("sex(%q) = (%v, ok=%v)", v, got, ok)
+		}
+	}
+	for _, bad := range []string{"0", "3", "m", "laki-laki"} {
+		ve = NewValidationError()
+		if _, ok := sex(ve, "jenis_kelamin", bad); ok {
+			t.Errorf("sex(%q) was accepted", bad)
+		}
+	}
+}
+
 func TestBookingAndProfileAgreeAboutCoordinates(t *testing.T) {
 	pairs := []struct{ lat, lng string }{
 		{"-0.949240", "100.354270"},
@@ -318,7 +387,11 @@ func TestBookingAndProfileAgreeAboutCoordinates(t *testing.T) {
 		bookingVE := NewValidationError()
 		coordinatePair(bookingVE, p.lat, p.lng)
 
-		_, _, profileVE := validateProfile("", "", p.lat, p.lng)
+		// Valid name and email so only the coordinates can drive a rejection —
+		// they are required now, unlike phone and the pin.
+		_, profileVE := validateProfile(ProfileInput{
+			Name: "Budi", Email: "budi@example.com", Latitude: p.lat, Longitude: p.lng,
+		})
 
 		if bookingVE.Any() != (profileVE != nil) {
 			t.Errorf("(%q,%q): the booking form and the profile form disagree "+

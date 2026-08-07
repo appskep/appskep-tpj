@@ -9,8 +9,15 @@
 package model
 
 import (
+	"database/sql"
+	"strconv"
+
 	"github.com/remorac/appskep-tpj/internal/database/sqlc"
 )
+
+// birthdateLayout is the yyyy-mm-dd string form of users.birthdate, the same
+// shape the HTML date input submits and the Appskep account API expects.
+const birthdateLayout = "2006-01-02"
 
 // User is the local mirror of an Appskep identity.
 //
@@ -23,7 +30,13 @@ type User struct {
 	Name          string
 	Email         string
 	Phone         string
-	Address       string
+	// Birthdate is the yyyy-mm-dd string, empty when unset. Sex is "1", "2" or
+	// empty — Appskep's convention. Both are mirrored from Appskep so the profile
+	// form can prefill them; they are not in the JWT, so the mirror is their only
+	// local copy.
+	Birthdate string
+	Sex       string
+	Address   string
 	// Latitude and Longitude are the saved map pin, empty when there is none.
 	// Both or neither: the pair is written together and unwrapped together.
 	Latitude   string
@@ -42,6 +55,8 @@ func UserFromSQLC(u sqlc.User) User {
 		Name:          u.Name,
 		Email:         u.Email,
 		Phone:         u.Phone.String,
+		Birthdate:     birthdateString(u.Birthdate),
+		Sex:           sexString(u.Sex),
 		Address:       u.Address.String,
 		Latitude:      u.Latitude.String,
 		Longitude:     u.Longitude.String,
@@ -49,6 +64,23 @@ func UserFromSQLC(u sqlc.User) User {
 		Role:          string(u.Role),
 		IsActive:      u.IsActive,
 	}
+}
+
+// birthdateString renders users.birthdate (a nullable DATE) as yyyy-mm-dd, or
+// "" when unset. The one place this column is unwrapped, per the package doc.
+func birthdateString(t sql.NullTime) string {
+	if !t.Valid {
+		return ""
+	}
+	return t.Time.Format(birthdateLayout)
+}
+
+// sexString renders users.sex (a nullable TINYINT) as "1"/"2", or "" when unset.
+func sexString(n sql.NullInt16) string {
+	if !n.Valid {
+		return ""
+	}
+	return strconv.FormatInt(int64(n.Int16), 10)
 }
 
 // IsAdmin reports whether the user may reach the admin subsystem.

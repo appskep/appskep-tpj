@@ -28,12 +28,16 @@ UPDATE users SET role = ? WHERE id = ?;
 UPDATE users SET is_active = ? WHERE id = ?;
 
 -- name: UpdateUserProfile :exec
--- Only the locally-owned fields. name and email belong to Appskep and are
--- refreshed from the JWT on each login.
+-- Runs only after the Appskep account API has accepted the same values, so it
+-- mirrors what Appskep now holds. name/email/phone/birthdate/sex are
+-- Appskep-owned and pushed there first; address/latitude/longitude are local.
 --
 -- latitude and longitude move as a pair, always both, so clearing the map pin
 -- cannot leave half of one behind.
-UPDATE users SET phone = ?, address = ?, latitude = ?, longitude = ? WHERE id = ?;
+UPDATE users
+SET name = ?, email = ?, phone = ?, birthdate = ?, sex = ?,
+    address = ?, latitude = ?, longitude = ?
+WHERE id = ?;
 
 -- name: UpdateUserAvatar :exec
 UPDATE users SET avatar_path = ? WHERE id = ?;

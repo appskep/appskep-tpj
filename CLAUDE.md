@@ -408,6 +408,19 @@ password column. Login/register/reset pages are thin redirects to Appskep.
 See [authentication.md](authentication.md) (describes a Gin app — adapt, don't copy)
 and PLAN.md Phase 3, including the list of the reference app's defects not to repeat.
 
+"No credentials" is about **authentication**: TPJ never verifies or stores a password
+and never authenticates anyone. It is *not* a rule that account data can only be read.
+Since Phase 14 the profile page *edits* the Appskep account — name, email, phone,
+birthdate, sex and the password — by forwarding to the Appskep account API
+(`PUT /v2/user/update`, `PUT /v2/user/set-password`) with the **signed-in user's own
+JWT** as the bearer token, exactly as the inline token refresh already does. The client
+is `auth.Account` / `HTTPAccount` behind the same seam as `Refresher`; the raw token
+reaches the handler through `auth.TokenFrom(ctx)`, set in `withSession` and never
+rendered into HTML. All calls are **server-side** — the CSP is `connect-src 'self'`, so
+a browser `fetch` to `AUTH_URL` is impossible and none is wanted. Appskep stays the
+source of truth: the local `users` row is a mirror written **only after** the account
+API has accepted the same values (`service.Profile.Update`). See Profil (Phase 14).
+
 Shipped in Phase 3, and load-bearing:
 
 - **The gate is three `*app.Deps` methods in `internal/app/auth.go`** — `OptionalAuth`,
@@ -519,8 +532,11 @@ Two rules, both found only in a browser and both cheap to re-break:
   `?status=` mean "everything" instead of an empty list that reads as "you have none".
 - **Labels come from `view.StatusBadge`,** never retyped in a handler, so a filter chip and
   the badge it filters to cannot call one status two different things.
-- **Read-only identity is text with a link, not a disabled input.** Name and email belong to
-  Appskep; `{{authURL}}` is the only way to reach them. Same rule as the coming-soon CTA.
+- **Identity was read-only text with a link in Phase 9; Phase 14 made it editable.** Name,
+  email, phone, birthdate and sex are now real inputs that POST to `/profil` and are pushed
+  to Appskep (see Authentication → Phase 14). `{{authURL}}` remains as a secondary link for
+  the account settings TPJ does not surface. The old rule ("belong to Appskep, so text not a
+  disabled input") is superseded — TPJ can write them now.
 - **Uploads with different caps get their own `upload.ImageStore`** (avatars are 1 MB, service
   images 2 MB), built in `main.go` so an unwritable directory is a failed boot.
 - **Print is `print:hidden` on the layout chrome**, not a stylesheet — Tailwind v4's variant,

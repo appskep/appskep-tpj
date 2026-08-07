@@ -38,6 +38,7 @@ Sistem booking & pembayaran online: **Go monolith + chi + sqlc + MariaDB + Go ht
 | 13.7 | Terapis (profil terapis) | DONE | 2026-08-06. A new `therapists` entity with public pages (`/terapis`, `/terapis/{slug}`), full admin CRUD, and a many-to-many "layanan yang dikuasai" link cross-linked both ways with `/layanan/{slug}`. **Display-only**: no `bookings.therapist_id` and no slot assignment, so the concurrency design is untouched — `schedule_slots.capacity` remains the model for parallel therapists and this is the marketing side of the same fact. `therapist_services` is the schema's **first CASCADE**, and deliberately: under RESTRICT, deleting a tagged layanan raises an FK violation that `Catalog.Delete` translates to `ErrHasBookings`, telling the operator a layanan has bookings when it has none. Nine new tests, one seen red by flipping that FK back. See **Phase 13.7 notes** below |
 | 13.8 | Admin — peta lokasi booking | DONE | 2026-08-06. The admin booking detail's coordinate pair became a read-only Leaflet map plus a "Buka di Google Maps" button. One widget, two modes: `data-map-readonly` on the same `[data-map]` element app.js already builds, so the tile config, the lazy Leaflet load, the `turbo:frame-load` handling and the CSP all come along unchanged. **No new CSP origin** — `img-src` already carries the tile host, derived at boot from `MAP_TILE_URL`. Two new tests, one seen red |
 | 13.9 | Terapis — sembunyikan menu saat kosong | DONE | 2026-08-06. The public nav, the mobile drawer, the footer and the sitemap stop advertising `/terapis` when no therapist is published — a menu entry leading to "Belum ada profil terapis" is the coming-soon CTA's defect in the chrome. `/terapis` itself still serves **200** with its empty state, and `/admin/terapis` is never hidden: it is where the first therapist gets created. The answer is a cached `atomic.Bool` on `service.Therapists`, loaded at boot and refreshed by all four write methods — the `Settings.Update` → `Reload` pattern, chosen over a per-render query because `fill()` runs on every response including the payment poller's frames. Six new tests; the `Update` one seen red, and it is the only one that catches a missing hook. See **Phase 13.9 notes** below |
+| 13.10 | Profil — edit akun Appskep | DONE | 2026-08-08. The profile page stopped being read-only for identity: name, email, phone, birthdate and sex are now editable and **pushed to the Appskep account API** (`PUT /v2/user/update`), and a separate section changes the password (`PUT /v2/user/set-password`). Both are authorised by the **signed-in user's own JWT** as a bearer token — the same token the inline refresh already uses — reached through a new `auth.TokenFrom(ctx)` set in `withSession`. The client is `auth.Account`/`HTTPAccount`, the same seam as `Refresher`; all calls are **server-side** because the CSP is `connect-src 'self'`. Appskep stays the source of truth: the local mirror (`users`, now with `birthdate`/`sex`) is written **only after** the API accepts the same values, and a rejection becomes a `ValidationError` on the `akun` notice with Appskep's own message. "No credentials" is unchanged — TPJ still verifies and stores no password. Empty optional fields are **omitted** from the update body so a value TPJ never learned (education, address province/district) cannot be wiped; **confirm this against a staging account's partial-vs-full-replace behaviour before go-live.** Five new tests (three integration, three validators). See **Phase 13.10 notes** below |
 | 14 | Deployment & go-live | TODO | |
 
 ---
@@ -2044,6 +2045,64 @@ against a database with every therapist deactivated.
   and bypass the service, so neither refreshes the flag. A test that changes therapist rows
   that way and then asserts on the menu is measuring a stale cache, not the code. The file's
   header comment says so.
+
+---
+
+## Phase 13.10 — Profil: edit akun Appskep
+
+Requested after Phase 13.9. The profile page could edit only the locally-owned fields
+(phone, address, map pin, avatar) and showed name/email as read-only text with a link to
+Appskep. This makes the Appskep account itself editable from TPJ — name, email, phone,
+birthdate, sex and the password.
+
+The account API is the **Appskep auth service** (`AUTH_URL`), not the admin app: exploring
+`appskep-ukom-admin` showed it is itself only a *client* of that service, forwarding
+`PUT /v2/user/update` (name, email, phone, birthdate, sex, …) and `PUT /v2/user/set-password`
+(`{newPassword, newPasswordConfirm}`) with the user's bearer JWT. TPJ already holds that JWT
+in its session, so the same token authorises the same endpoints.
+
+Decisions taken during execution:
+
+- **The boundary moved, the principle did not.** "TPJ owns no credentials" is about
+  authentication — no login, no password check, no stored password — and all of that still
+  holds. Editing account data through the user's own token is not owning a credential; it is
+  the token-refresh call with a different verb. `service.Profile` and `handler.Profil` say so
+  in their doc comments, replacing the Phase 9 "no local form" note.
+- **`auth.Account` behind the `Refresher` seam.** An interface + `HTTPAccount` with a per-call
+  `context.WithTimeout`, `NewRequestWithContext`, bearer header and bounded read — copied from
+  `refresh.go`. A `FakeAccount` in `testsupport` drives the push, the rejection and the
+  password paths without a network, exactly as `FakeGateway` does for Midtrans.
+- **The token reaches the handler through the context, not the session.** `auth.WithToken` in
+  `withSession` (only for a signed-in user) and `auth.TokenFrom(ctx)` in the handler, beside
+  `WithUser`/`WithCSRF`. It is never rendered into HTML, like the session token it is.
+- **Server-side only, so no CSP change.** `connect-src 'self'` makes a browser `fetch` to
+  `AUTH_URL` impossible — the admin app changes the password with a client-side `fetch`, which
+  TPJ cannot and should not. The Go client does it, and nothing in the CSP moves.
+- **Appskep is the source of truth; the local row is a mirror written only on success.**
+  `Profile.Update` validates, pushes to Appskep, and only then writes `UpdateUserProfile`
+  (extended to carry name/email/birthdate/sex too). A rejection short-circuits before any
+  local write and before the avatar file is saved, mapped to a `ValidationError` on the `akun`
+  notice carrying Appskep's own message. A local write failing *after* Appskep accepted is
+  logged and returned; the mirror catches up on next login, since the JWT then reflects the new
+  name/email.
+- **birthdate/sex are new mirror columns** (`DATE`/`TINYINT`, nullable), unwrapped to strings
+  in `model.UserFromSQLC` — they are not in the JWT, so the mirror is their only local copy and
+  the form's only prefill source. name/email/phone are also refreshed from the JWT on login.
+- **Empty optional fields are omitted from the update body.** `/v2/user/update`'s
+  partial-vs-full-replace behaviour is undocumented in either repo, and TPJ does not share
+  Appskep's user table — it cannot see education/address-province/district, so it cannot
+  preserve them in a full replace. Omitting an empty field is the only encoding that cannot
+  wipe a value TPJ never learned. **Verify against a staging account before go-live**; if it is
+  a full replace, this encoding is already correct, but confirm the untouched fields survive.
+- **The password is a separate form and route** (`POST /profil/kata-sandi`), so a routine save
+  never carries a password and a password change never re-posts every field. Both redirect on
+  success, so neither carries `data-turbo="false"`. Appskep enforces the strength policy; TPJ
+  pre-checks only the empty box, an 8-char floor and the confirm match.
+
+**Browser QA left for go-live** (curl cannot see it — QA.md's rule): a 422 re-render of an
+invalid email or a mismatched password confirm, in a real browser, with the typed values intact
+and the password never echoed; and a live push against a sandbox Appskep account to confirm the
+five fields land and the untouched account fields survive.
 
 ---
 

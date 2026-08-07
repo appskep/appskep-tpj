@@ -230,6 +230,11 @@ func (d *Deps) withSession(w http.ResponseWriter, r *http.Request, user *model.U
 	if user != nil {
 		ctx = auth.WithUser(ctx, user)
 
+		// The raw JWT rides the context so the profile handler can present it as
+		// the bearer token to the Appskep account API. It never leaves the server,
+		// like the session token it is.
+		ctx = auth.WithToken(ctx, sess.Token)
+
 		// The CSRF secret is minted only for a signed-in visitor. Every
 		// state-changing route in the app sits behind RequireAuth or RequireAdmin,
 		// so an anonymous token would protect nothing — and minting one would set a

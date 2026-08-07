@@ -157,6 +157,18 @@ func (a AuthConfig) RefreshURL(token string) string {
 		strings.TrimRight(a.URL, "/"), url.QueryEscape(token))
 }
 
+// UpdateURL is the auth service's profile-update endpoint. The bearer token
+// authorises it, so the user ID travels in the JWT, not the path.
+func (a AuthConfig) UpdateURL() string {
+	return strings.TrimRight(a.URL, "/") + "/v2/user/update"
+}
+
+// SetPasswordURL is the auth service's password-change endpoint, authorised the
+// same way — the account is the one the bearer token identifies.
+func (a AuthConfig) SetPasswordURL() string {
+	return strings.TrimRight(a.URL, "/") + "/v2/user/set-password"
+}
+
 // IsBootstrapAdmin reports whether an Appskep user ID is in the admin allowlist.
 func (a AuthConfig) IsBootstrapAdmin(appskepUserID string) bool {
 	for _, id := range a.AdminUserIDs {

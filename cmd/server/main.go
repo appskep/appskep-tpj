@@ -192,7 +192,7 @@ func run() error {
 		// page cannot advertise a slot the booking form would refuse.
 		Booking:   service.NewBooking(store, settings, schedule, email, cfg.Midtrans.ExpiryMinutes, cfg.App.Location),
 		Payment:   service.NewPayment(store, gateway, log, email, cfg.Midtrans, cfg.App.URL, cfg.App.Location),
-		Profile:   service.NewProfile(store, avatars),
+		Profile:   service.NewProfile(store, avatars, auth.NewHTTPAccount(cfg.Auth)),
 		Users:     service.NewUsers(store),
 		Dashboard: service.NewDashboard(store, log, cfg.App.Location),
 		Audit:     service.NewAudit(store, log),

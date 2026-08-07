@@ -47,6 +47,8 @@ type Env struct {
 	Gateway *FakeGateway
 	// Mail is the mail.Sender behind Deps.Email.
 	Mail *RecordingSender
+	// Account is the Appskep account-API stand-in behind Deps.Profile.
+	Account *FakeAccount
 
 	// UploadRoot is the t.TempDir every ImageStore writes under, so a test can
 	// assert that a delete actually removed the file and not just the row.
@@ -139,6 +141,7 @@ func New(t *testing.T) *Env {
 	schedule := service.NewSchedule(store, settings, cfg.App.Location)
 	gateway := NewFakeGateway()
 	sender := NewRecordingSender()
+	account := NewFakeAccount()
 
 	email, err := service.NewEmail(templates, store, sender, settings, log, service.EmailConfig{
 		AppURL:       cfg.App.URL,
@@ -163,7 +166,7 @@ func New(t *testing.T) *Env {
 			cfg.Midtrans.ExpiryMinutes, cfg.App.Location),
 		Payment: service.NewPayment(store, gateway, log, email,
 			cfg.Midtrans, cfg.App.URL, cfg.App.Location),
-		Profile:   service.NewProfile(store, avatars),
+		Profile:   service.NewProfile(store, avatars, account),
 		Users:     service.NewUsers(store),
 		Dashboard: service.NewDashboard(store, log, cfg.App.Location),
 		Audit:     service.NewAudit(store, log),
@@ -180,6 +183,7 @@ func New(t *testing.T) *Env {
 		Deps:       deps,
 		Gateway:    gateway,
 		Mail:       sender,
+		Account:    account,
 		UploadRoot: uploadRoot,
 		AuthURL:    cfg.Auth.URL,
 		logMu:      logMu,

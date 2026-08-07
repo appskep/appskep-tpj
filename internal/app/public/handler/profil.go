@@ -14,10 +14,12 @@ import (
 
 // Profil is the customer's own account page.
 //
-// It edits three fields and links out for everything else. Name, email and
-// password belong to Appskep (PLAN.md R1, R2) — there is no local form for any
-// of them, and the page says so rather than rendering a disabled input the user
-// might keep trying.
+// It edits the Appskep account fields (name, email, phone, birthdate, sex) and
+// the password by forwarding to the Appskep account API with the signed-in
+// user's own token, and the local fields (address, map pin, avatar) directly.
+// The account fields are also mirrored locally so this page and the booking
+// form prefill from the same row. TPJ still owns no credentials — see
+// service.Profile.
 type Profil struct {
 	deps *app.Deps
 }
@@ -44,8 +46,13 @@ const (
 // user typed. Field names match the HTML input names, which are also the
 // ValidationError keys.
 type profilFormValues struct {
-	Telepon string
-	Alamat  string
+	// Appskep-owned, edited here and pushed to the account API.
+	Nama         string
+	Email        string
+	Telepon      string
+	TanggalLahir string // yyyy-mm-dd, the value attribute of the date input
+	JenisKelamin string // "1", "2" or ""
+	Alamat       string
 	// Written by the map widget, empty when no pin is saved. Strings the whole
 	// way, for the same reason bookingFormValues carries them as strings.
 	Latitude  string
@@ -60,10 +67,14 @@ type profilFormValues struct {
 // silently blank the user's saved pin on an oversized upload.
 func profilFormFromUser(u model.User) profilFormValues {
 	return profilFormValues{
-		Telepon:   u.Phone,
-		Alamat:    u.Address,
-		Latitude:  u.Latitude,
-		Longitude: u.Longitude,
+		Nama:         u.Name,
+		Email:        u.Email,
+		Telepon:      u.Phone,
+		TanggalLahir: u.Birthdate,
+		JenisKelamin: u.Sex,
+		Alamat:       u.Address,
+		Latitude:     u.Latitude,
+		Longitude:    u.Longitude,
 	}
 }
 
@@ -137,14 +148,22 @@ func (h *Profil) Save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	values := profilFormValues{
-		Telepon:   r.PostFormValue("telepon"),
-		Alamat:    r.PostFormValue("alamat"),
-		Latitude:  r.PostFormValue("latitude"),
-		Longitude: r.PostFormValue("longitude"),
+		Nama:         r.PostFormValue("nama"),
+		Email:        r.PostFormValue("email"),
+		Telepon:      r.PostFormValue("telepon"),
+		TanggalLahir: r.PostFormValue("tanggal_lahir"),
+		JenisKelamin: r.PostFormValue("jenis_kelamin"),
+		Alamat:       r.PostFormValue("alamat"),
+		Latitude:     r.PostFormValue("latitude"),
+		Longitude:    r.PostFormValue("longitude"),
 	}
 
 	in := service.ProfileInput{
+		Name:         values.Nama,
+		Email:        values.Email,
 		Phone:        values.Telepon,
+		Birthdate:    values.TanggalLahir,
+		Sex:          values.JenisKelamin,
 		Address:      values.Alamat,
 		Latitude:     values.Latitude,
 		Longitude:    values.Longitude,
@@ -159,8 +178,9 @@ func (h *Profil) Save(w http.ResponseWriter, r *http.Request) {
 
 	// The result is not kept: the redirect below re-enters RequireAuth, which
 	// re-reads the users row on every request, so the page that renders next
-	// shows the stored values rather than this function's idea of them.
-	if _, err := h.deps.Profile.Update(r.Context(), user.ID, in); err != nil {
+	// shows the stored values rather than this function's idea of them. The raw
+	// JWT authorises the Appskep account write.
+	if _, err := h.deps.Profile.Update(r.Context(), user.ID, auth.TokenFrom(r.Context()), in); err != nil {
 		h.formError(w, r, err, *user, values)
 		return
 	}
@@ -168,6 +188,44 @@ func (h *Profil) Save(w http.ResponseWriter, r *http.Request) {
 	// FlashRedirect, not SaveFlashAndRedirect: the latter replaces the whole
 	// session with the flash and would sign the user out on saving their profile.
 	h.deps.FlashRedirect(w, r, profilPath, model.FlashSuccess("Profil berhasil disimpan."))
+}
+
+// SavePassword changes the Appskep password from its own form.
+//
+// A separate route and a separate form so a routine profile save never carries
+// a password, and a password change never re-posts every other field. It
+// redirects on success like Save, so its form must NOT carry data-turbo="false".
+// A rejection re-renders the profile page at 422 with the message; the password
+// values themselves are never echoed back.
+func (h *Profil) SavePassword(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFrom(r.Context())
+	if user == nil {
+		h.deps.ErrorPage(w, r, http.StatusForbidden)
+		return
+	}
+
+	err := h.deps.Profile.UpdatePassword(r.Context(), auth.TokenFrom(r.Context()),
+		r.PostFormValue("kata_sandi_baru"), r.PostFormValue("konfirmasi_kata_sandi"))
+	if err != nil {
+		var ve *service.ValidationError
+		if errors.As(err, &ve) {
+			// Re-render the whole page: the password section lives on it, and the
+			// profile fields come from the stored row, never from this request.
+			h.render(w, r, http.StatusUnprocessableEntity, profilData{
+				User:      *user,
+				Form:      profilFormFromUser(*user),
+				HasAvatar: user.AvatarPath != "",
+				Errors:    ve.Fields,
+			})
+			return
+		}
+		h.deps.Log.ErrorContext(r.Context(), "profil: changing password",
+			"user_id", user.ID, slog.Any("error", err))
+		h.deps.ErrorPage(w, r, http.StatusInternalServerError)
+		return
+	}
+
+	h.deps.FlashRedirect(w, r, profilPath, model.FlashSuccess("Kata sandi berhasil diperbarui."))
 }
 
 // formError renders a failed save: a validation problem re-renders the form with

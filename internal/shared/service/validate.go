@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"net/mail"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // The primitives every validator in this package was repeating.
@@ -152,4 +154,66 @@ func coordinatePair(ve *ValidationError, lat, lng string) (sql.NullString, sql.N
 	}
 
 	return sql.NullString{String: normLat, Valid: true}, sql.NullString{String: normLng, Valid: true}
+}
+
+// The Appskep account fields, added by the profile module in Phase 14. Name and
+// phone reuse the booking-form bounds and helpers above; email, birthdate and
+// sex are new here because the booking form never carried them. All three are
+// pushed to the Appskep account API, which does its own authoritative check —
+// these catch the obvious mistakes before a network round trip and key the
+// message to the input the user can fix.
+
+// maxUserEmailLen mirrors users.email VARCHAR(255).
+const maxUserEmailLen = 255
+
+// email applies a light format check to a non-empty value: exactly one address,
+// no display name. It does not try to prove the mailbox exists — Appskep owns
+// that — only to reject an obvious typo before forwarding it.
+func email(ve *ValidationError, field, value string) bool {
+	if !maxLen(ve, field, "Email", value, maxUserEmailLen) {
+		return false
+	}
+	addr, err := mail.ParseAddress(value)
+	if err != nil || addr.Name != "" || addr.Address != value {
+		ve.Add(field, "Format email tidak valid.")
+		return false
+	}
+	return true
+}
+
+// birthdate parses a non-empty yyyy-mm-dd value into a nullable DATE. Empty is a
+// valid answer meaning "not provided" and yields a NULL — the field is optional,
+// like the map pin. A value that is not a real calendar date is rejected with a
+// message on its own input.
+func birthdate(ve *ValidationError, field, value string) (sql.NullTime, bool) {
+	if value == "" {
+		return sql.NullTime{}, true
+	}
+	t, err := time.Parse(birthdateLayout, value)
+	if err != nil {
+		ve.Add(field, "Tanggal lahir tidak valid.")
+		return sql.NullTime{}, false
+	}
+	return sql.NullTime{Time: t, Valid: true}, true
+}
+
+// birthdateLayout is yyyy-mm-dd, the shape the HTML date input submits, the
+// Appskep account API expects, and model.User renders back for prefill.
+const birthdateLayout = "2006-01-02"
+
+// sex parses Appskep's convention: "" (not provided) → NULL, "1" or "2" → the
+// value, anything else → an error. The inputs come from a <select>, so an
+// out-of-range value is a hand-crafted POST rather than a typo.
+func sex(ve *ValidationError, field, value string) (sql.NullInt16, bool) {
+	switch value {
+	case "":
+		return sql.NullInt16{}, true
+	case "1":
+		return sql.NullInt16{Int16: 1, Valid: true}, true
+	case "2":
+		return sql.NullInt16{Int16: 2, Valid: true}, true
+	default:
+		ve.Add(field, "Jenis kelamin tidak valid.")
+		return sql.NullInt16{}, false
+	}
 }

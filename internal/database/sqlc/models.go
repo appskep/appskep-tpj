@@ -237,6 +237,8 @@ type User struct {
 	Email         string         `json:"email"`
 	Name          string         `json:"name"`
 	Phone         sql.NullString `json:"phone"`
+	Birthdate     sql.NullTime   `json:"birthdate"`
+	Sex           sql.NullInt16  `json:"sex"`
 	Address       sql.NullString `json:"address"`
 	Latitude      sql.NullString `json:"latitude"`
 	Longitude     sql.NullString `json:"longitude"`

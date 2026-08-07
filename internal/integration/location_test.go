@@ -189,7 +189,9 @@ func TestProfileStoresAndClearsTheMapPin(t *testing.T) {
 
 	user := env.User(9404)
 
-	saved, err := env.Deps.Profile.Update(context.Background(), user.ID, service.ProfileInput{
+	saved, err := env.Deps.Profile.Update(context.Background(), user.ID, "test-token", service.ProfileInput{
+		Name:      user.Name,
+		Email:     user.Email,
 		Phone:     "081234567890",
 		Address:   "Jl. Contoh No. 1",
 		Latitude:  "-0.949240",
@@ -203,7 +205,9 @@ func TestProfileStoresAndClearsTheMapPin(t *testing.T) {
 			saved.Latitude, saved.Longitude, testLat, testLng)
 	}
 
-	cleared, err := env.Deps.Profile.Update(context.Background(), user.ID, service.ProfileInput{
+	cleared, err := env.Deps.Profile.Update(context.Background(), user.ID, "test-token", service.ProfileInput{
+		Name:    user.Name,
+		Email:   user.Email,
 		Phone:   "081234567890",
 		Address: "Jl. Contoh No. 1",
 	})
@@ -262,7 +266,9 @@ func TestTheProfileWinsOverTheLastBooking(t *testing.T) {
 
 	// A profile holding the phone number and nothing else: the phone must come
 	// from here, the address and the pin from the booking above.
-	if _, err := env.Deps.Profile.Update(context.Background(), user.ID, service.ProfileInput{
+	if _, err := env.Deps.Profile.Update(context.Background(), user.ID, "test-token", service.ProfileInput{
+		Name:  user.Name,
+		Email: user.Email,
 		Phone: "081200000000",
 	}); err != nil {
 		t.Fatalf("Profile.Update: %v", err)
